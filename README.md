@@ -1,1 +1,1 @@
-# New Project: A particle that learning how to fly## Dev notes:- implement double integrator- implement PD control - implement basic learning learning - build a deep Q network eventually- see where it goes
+# New Project: A particle that learns how to fly## Dev notes:- implement double integrator- implement PD control - implement basic learning learning - build a deep Q network eventually- see where it goes
