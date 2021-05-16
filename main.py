@@ -27,6 +27,8 @@ import matplotlib.animation as animation
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg' #my add - this path needs to be added
 Writer = animation.writers['ffmpeg']
 writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+import qLearnLib as QL
+from numpy import linalg as LA
 
 #%% Simulation Setup
 # --------------------
@@ -52,6 +54,22 @@ states_all      = np.zeros([nSteps, len(state)])    # to store states
 states_all[0,:] = state                             # store initial state
 targets_all      = np.zeros([nSteps, len(target)])  # to store targets
 targets_all[0,:] = target                           # store initial target
+
+# initialize Q table
+nParams     = 2    # number of parameters to tune
+nOptions    = 10   # number of options to selection from (ranges between 0 and 1)
+scale       = 3    # scale the value of the options (i.e. scale*[0:1])
+Tl          = 2    # length of trial [s]
+trial_counter = 0  # initialize counter 
+trial_cost    = 0  # initialze cost 
+Q = QL.init(nParams,nOptions)
+
+# select initial parameters from Q table 
+kp_i = QL.select(Q,0,nOptions)
+kp = scale*kp_i
+kd_i = QL.select(Q,1,nOptions)
+kd = scale*kd_i
+
 
 #%% Define the agent dynamics
 # ---------------------------
@@ -89,9 +107,35 @@ while round(t,3) < Tf:
     # move target 
     target = np.array([5*np.sin(i*Ts*0.2),5*np.cos(0.5*i*Ts*0.2),1])
 
+    # still working on this
+    if round(trial_counter,3) < Tl:
+    
+        # accumulate the cost
+        trial_cost += LA.norm(target-state[0:6:2])
+    
+        # increment the counter 
+        trial_counter += Ts
+        
+    else: 
+        
+        #update the Q table
+        Q = QL.update(Q,0,kp_i,0,1/trial_cost)
+        Q = QL.update(Q,1,kp_i,1,1/trial_cost)
+        
+        # select new parameter from Q table 
+        kp_i = QL.select(Q,0,nOptions)
+        kp = scale*kp_i
+        kd_i = QL.select(Q,1,nOptions)
+        kd = scale*kd_i
+        
+        # reset
+        trial_counter = 0
+        
+
+
     # controller (PD type)
-    kp = 2
-    kd = 1.4
+    #kp = 2
+    #kd = 1.4
     outputs = np.array([state[0],state[2], state[4]]) 
     derror = (1/Ts)*((outputs-target) - error)
     error = outputs-target
@@ -105,7 +149,7 @@ fig = plt.figure()
 ax = p3.Axes3D(fig)
 
 ax.grid()
-axis = 5
+axis = 10
 ax.set_xlim3d([-axis, axis])
 ax.set_ylim3d([-axis, axis])
 ax.set_zlim3d([-axis, axis])
@@ -130,6 +174,6 @@ def update(i):
 ani = animation.FuncAnimation(fig, update, np.arange(1, len(states_all)),
     interval=15, blit=False)
 
-ani.save('animation.gif', writer=writer)
-plt.show()
+#ani.save('animation.gif', writer=writer)
+#plt.show()
 
