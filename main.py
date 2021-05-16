@@ -50,7 +50,8 @@ t_all           = np.zeros(nSteps)                  # to store times
 t_all[0]        = Ti                                # store initial time
 states_all      = np.zeros([nSteps, len(state)])    # to store states
 states_all[0,:] = state                             # store initial state
-
+targets_all      = np.zeros([nSteps, len(target)])  # to store targets
+targets_all[0,:] = target                           # store initial target
 
 #%% Define the agent dynamics
 # ---------------------------
@@ -79,6 +80,7 @@ while round(t,3) < Tf:
     # store results
     t_all[i]            = t
     states_all[i,:]     = state
+    targets_all[i,:]    = target                           
 
     # increment 
     t += Ts
@@ -88,8 +90,8 @@ while round(t,3) < Tf:
     target = np.array([5*np.sin(i*Ts*0.2),5*np.cos(0.5*i*Ts*0.2),1])
 
     # controller (PD type)
-    kp = 1
-    kd = 0.4
+    kp = 2
+    kd = 1.4
     outputs = np.array([state[0],state[2], state[4]]) 
     derror = (1/Ts)*((outputs-target) - error)
     error = outputs-target
@@ -108,7 +110,9 @@ ax.set_xlim3d([-axis, axis])
 ax.set_ylim3d([-axis, axis])
 ax.set_zlim3d([-axis, axis])
 
-line, = ax.plot([], [],[], 'o-', lw=2)
+line, = ax.plot([], [],[], 'bo-',ms=10, lw=2)
+line_target, = ax.plot([], [],[], 'ro-', ms=5, lw=2)
+
 time_template = 'Time = %.1fs'
 time_text = ax.text2D(0.05, 0.95, '', transform=ax.transAxes)
 time_text2 = ax.text2D(0.65, 0.95, 'Double Integrator Kinematics', transform=ax.transAxes)
@@ -118,6 +122,8 @@ time_text3 = ax.text2D(0.65, 0.90, 'Controller: PD', transform=ax.transAxes)
 def update(i):
     line.set_data(states_all[i,0],states_all[i,2])
     line.set_3d_properties(states_all[i,4])
+    line_target.set_data(targets_all[i,0],targets_all[i,1])
+    line_target.set_3d_properties(targets_all[i,2])
     time_text.set_text(time_template%(i*Ts))
     return line, time_text
 
