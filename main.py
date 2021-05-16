@@ -34,7 +34,7 @@ from numpy import linalg as LA
 # --------------------
  
 Ti = 0.0        # initial time
-Tf = 300         # final time 
+Tf = 800         # final time 
 Ts = 0.1        # sample time
 Tz = 0.005      # integration step size
 
@@ -62,7 +62,7 @@ rewards_all[0,:] = reward
 nParams     = 2    # number of parameters to tune
 nOptions    = 10   # number of options to selection from (ranges between 0 and nOptions)
 scale       = 2    # scale the value of the options (i.e. scale*[0:nOptions])
-Tl          = 1    # length of trial [s]
+Tl          = 2    # length of trial [s]
 trial_counter = 0  # initialize counter 
 trial_cost    = 0  # initialze cost 
 explore_rate  = 0.95  # how often to explore, 0 to 1 (start high, decrease)
@@ -141,7 +141,7 @@ while round(t,3) < Tf:
         trial_counter = 0
         
         # reduce the explore rate
-        explore_rate = 0.95*explore_rate
+        explore_rate = 0.999*explore_rate
         
 
 
