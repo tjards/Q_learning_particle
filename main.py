@@ -34,7 +34,7 @@ from numpy import linalg as LA
 # --------------------
  
 Ti = 0.0        # initial time
-Tf = 60         # final time 
+Tf = 300         # final time 
 Ts = 0.1        # sample time
 Tz = 0.005      # integration step size
 
@@ -43,6 +43,7 @@ inputs  = np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddo
 target  = np.array([0,0,1])                        # format: [xr, yr, zr]
 outputs = np.array([state[0],state[2],state[4]])   # format: [x, y, z]
 error   = outputs - target
+reward = 1/LA.norm(error)
 t       = Ti
 i       = 1
 counter = 0  
@@ -54,20 +55,23 @@ states_all      = np.zeros([nSteps, len(state)])    # to store states
 states_all[0,:] = state                             # store initial state
 targets_all      = np.zeros([nSteps, len(target)])  # to store targets
 targets_all[0,:] = target                           # store initial target
+rewards_all      = np.zeros([nSteps, 1])  # to store targets
+rewards_all[0,:] = reward
 
 # initialize Q table
 nParams     = 2    # number of parameters to tune
-nOptions    = 10   # number of options to selection from (ranges between 0 and 1)
-scale       = 3    # scale the value of the options (i.e. scale*[0:1])
-Tl          = 2    # length of trial [s]
+nOptions    = 10   # number of options to selection from (ranges between 0 and nOptions)
+scale       = 2    # scale the value of the options (i.e. scale*[0:nOptions])
+Tl          = 1    # length of trial [s]
 trial_counter = 0  # initialize counter 
 trial_cost    = 0  # initialze cost 
+explore_rate  = 0.95  # how often to explore, 0 to 1 (start high, decrease)
 Q = QL.init(nParams,nOptions)
 
 # select initial parameters from Q table 
-kp_i = QL.select(Q,0,nOptions)
+kp_i = QL.select(Q,0,nOptions,explore_rate)
 kp = scale*kp_i
-kd_i = QL.select(Q,1,nOptions)
+kd_i = QL.select(Q,1,nOptions,explore_rate)
 kd = scale*kd_i
 
 
@@ -98,14 +102,15 @@ while round(t,3) < Tf:
     # store results
     t_all[i]            = t
     states_all[i,:]     = state
-    targets_all[i,:]    = target                           
+    targets_all[i,:]    = target
+    rewards_all[i,:]    = reward #1/np.maximum(trial_cost,0.00001)                           
 
     # increment 
     t += Ts
     i += 1
 
     # move target 
-    target = np.array([5*np.sin(i*Ts*0.2),5*np.cos(0.5*i*Ts*0.2),1])
+    target = np.array([10*np.sin(i*Ts*3),10*np.cos(0.5*i*Ts*3),1])
 
     # still working on this
     if round(trial_counter,3) < Tl:
@@ -118,18 +123,25 @@ while round(t,3) < Tf:
         
     else: 
         
+        trial_cost = trial_cost/Tl
+        reward = np.maximum(1/trial_cost,0.00001)
+        
         #update the Q table
-        Q = QL.update(Q,0,kp_i,0,1/trial_cost)
-        Q = QL.update(Q,1,kp_i,1,1/trial_cost)
+        Q = QL.update(Q,0,kp_i,0,reward)
+        Q = QL.update(Q,1,kd_i,1,reward)
         
         # select new parameter from Q table 
-        kp_i = QL.select(Q,0,nOptions)
+        kp_i = QL.select(Q,0,nOptions,explore_rate)
         kp = scale*kp_i
-        kd_i = QL.select(Q,1,nOptions)
+        kd_i = QL.select(Q,1,nOptions,explore_rate)
         kd = scale*kd_i
+        #print(kp,kd,1/trial_cost)
         
         # reset
         trial_counter = 0
+        
+        # reduce the explore rate
+        explore_rate = 0.95*explore_rate
         
 
 
@@ -158,10 +170,11 @@ line, = ax.plot([], [],[], 'bo-',ms=10, lw=2)
 line_target, = ax.plot([], [],[], 'ro-', ms=5, lw=2)
 
 time_template = 'Time = %.1fs'
+#reward_template = 'Last Reward = %.1f'
 time_text = ax.text2D(0.05, 0.95, '', transform=ax.transAxes)
 time_text2 = ax.text2D(0.65, 0.95, 'Double Integrator Kinematics', transform=ax.transAxes)
 time_text3 = ax.text2D(0.65, 0.90, 'Controller: PD', transform=ax.transAxes)
-
+#text_reward = ax.text2D(0.05, 0.90, '', transform=ax.transAxes)
 
 def update(i):
     line.set_data(states_all[i,0],states_all[i,2])
@@ -169,11 +182,12 @@ def update(i):
     line_target.set_data(targets_all[i,0],targets_all[i,1])
     line_target.set_3d_properties(targets_all[i,2])
     time_text.set_text(time_template%(i*Ts))
+    #text_reward.set_text(reward_template%rewards_all[i])
     return line, time_text
 
 ani = animation.FuncAnimation(fig, update, np.arange(1, len(states_all)),
     interval=15, blit=False)
 
-#ani.save('animation.gif', writer=writer)
-#plt.show()
+ani.save('animation.gif', writer=writer)
+plt.show()
 
