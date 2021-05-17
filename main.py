@@ -29,21 +29,25 @@ Writer = animation.writers['ffmpeg']
 writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
 import qLearnLib as QL
 from numpy import linalg as LA
+import random
 
 #%% Simulation Setup
 # --------------------
  
 Ti = 0.0        # initial time
-Tf = 800         # final time 
+Tf = 1000         # final time 
 Ts = 0.1        # sample time
 Tz = 0.005      # integration step size
 
 state   = np.array([1.9, 0.1, 1, 0.2, 0.3, 0.4])   # format: [x, xdot, y, ydot, z, zdot]
 inputs  = np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
-target  = np.array([0,0,1])                        # format: [xr, yr, zr]
+#target  = np.array([0.0,0.0,1.0])                  # format: [xr, yr, zr]
+target  = 9*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
+
 outputs = np.array([state[0],state[2],state[4]])   # format: [x, y, z]
 error   = outputs - target
-reward = 1/LA.norm(error)
+trial_cost  = LA.norm(error)
+reward      = 1/LA.norm(error)
 t       = Ti
 i       = 1
 counter = 0  
@@ -55,17 +59,19 @@ states_all      = np.zeros([nSteps, len(state)])    # to store states
 states_all[0,:] = state                             # store initial state
 targets_all      = np.zeros([nSteps, len(target)])  # to store targets
 targets_all[0,:] = target                           # store initial target
-rewards_all      = np.zeros([nSteps, 1])  # to store targets
+rewards_all      = np.zeros([nSteps, 1])  # to store rewards
 rewards_all[0,:] = reward
+costs_all      = np.zeros([nSteps, 1])  # to store costs
+costs_all[0,:] = trial_cost
 
 # initialize Q table
 nParams     = 2    # number of parameters to tune
 nOptions    = 10   # number of options to selection from (ranges between 0 and nOptions)
-scale       = 2    # scale the value of the options (i.e. scale*[0:nOptions])
+scale       = 1    # scale the value of the options (i.e. scale*[0:nOptions])
 Tl          = 2    # length of trial [s]
 trial_counter = 0  # initialize counter 
 trial_cost    = 0  # initialze cost 
-explore_rate  = 0.95  # how often to explore, 0 to 1 (start high, decrease)
+explore_rate  = 1  # how often to explore, 0 to 1 (start high, decrease)
 Q = QL.init(nParams,nOptions)
 
 # select initial parameters from Q table 
@@ -73,6 +79,9 @@ kp_i = QL.select(Q,0,nOptions,explore_rate)
 kp = scale*kp_i
 kd_i = QL.select(Q,1,nOptions,explore_rate)
 kd = scale*kd_i
+
+
+
 
 
 #%% Define the agent dynamics
@@ -103,14 +112,15 @@ while round(t,3) < Tf:
     t_all[i]            = t
     states_all[i,:]     = state
     targets_all[i,:]    = target
-    rewards_all[i,:]    = reward #1/np.maximum(trial_cost,0.00001)                           
+    rewards_all[i,:]    = reward #1/np.maximum(trial_cost,0.00001)      
+    costs_all[i,:]      = trial_cost #1/np.maximum(trial_cost,0.00001)                      
 
     # increment 
     t += Ts
     i += 1
 
-    # move target 
-    target = np.array([10*np.sin(i*Ts*3),10*np.cos(0.5*i*Ts*3),1])
+    # wander the target 
+    target = 9*np.array([1*np.sin(i*Ts*3),1*np.cos(0.5*i*Ts*3),1*np.sin(i*Ts*2)])
 
     # still working on this
     if round(trial_counter,3) < Tl:
@@ -123,7 +133,10 @@ while round(t,3) < Tf:
         
     else: 
         
+        # normalize the cost
         trial_cost = trial_cost/Tl
+        
+        #compute the reward
         reward = np.maximum(1/trial_cost,0.00001)
         
         #update the Q table
@@ -140,8 +153,12 @@ while round(t,3) < Tf:
         # reset
         trial_counter = 0
         
+        # select new target (randomly)
+        #target  = 10*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
+        
         # reduce the explore rate
-        explore_rate = 0.999*explore_rate
+        explore_rate = 0.995**t
+        #print(explore_rate)
         
 
 
@@ -188,6 +205,6 @@ def update(i):
 ani = animation.FuncAnimation(fig, update, np.arange(1, len(states_all)),
     interval=15, blit=False)
 
-ani.save('animation.gif', writer=writer)
-plt.show()
+#ani.save('animation.gif', writer=writer)
+#plt.show()
 
