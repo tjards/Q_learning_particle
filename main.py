@@ -35,6 +35,7 @@ Ti = 0.0        # initial time
 Tf = 2000         # final time 
 Ts = 0.1        # sample time
 Tz = 0.005      # integration step size
+verbose = 1     # print stuff?
 
 state   = np.array([1.9, 0.1, 1, 0.2, 0.3, 0.4])   # format: [x, xdot, y, ydot, z, zdot]
 inputs  = np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
@@ -154,7 +155,8 @@ while round(t,3) < Tf:
         trial_counter = Ts
         trial_cost = 0
         trial_counts += 1
-        print('trial ', trial_counts, 'done @:', round(t,2), 's' )
+        if verbose == 1:
+            print('trial ', trial_counts, 'done @:', round(t,2), 's' )
         
         # select new target (randomly)
         target = 10*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
@@ -168,7 +170,6 @@ while round(t,3) < Tf:
         
     # wander the target 
     target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
-
 
     # controller (PD type)
     #kp = 2
