@@ -275,14 +275,19 @@ def update(i):
 ani = animation.FuncAnimation(fig, update, np.arange(1, len(states_all)),interval=15, blit=False)
 
 #slow
-#ani2 = animation.FuncAnimation(fig, update, np.linspace(1, len(states_all), num=500, dtype=int),interval=15, blit=False)
+ani2 = animation.FuncAnimation(fig, update, np.linspace(1, len(states_all)-1, num=500, dtype=int),interval=15, blit=False)
 
 
-if plotsave == 1:
-    if verbose == 1:
-        ani.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
-    else:
-        ani.save('animation.gif', writer=writer)
+#ani.save('animation.gif', writer=writer)
+#ani.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
+ani2.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
+
+
+# if plotsave == 1:
+#     if verbose == 1:
+#         ani.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
+#     else:
+#         ani.save('animation.gif', writer=writer)
 
 
 #plt.show()
