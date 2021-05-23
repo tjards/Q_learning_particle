@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+
+Q-Learning module
+
 Created on Sat May 15 20:40:36 2021
 
 @author: tjards
