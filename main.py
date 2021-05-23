@@ -47,7 +47,7 @@ trial_cost  = LA.norm(error)
 reward      = 1/LA.norm(error)
 t       = Ti
 i       = 1
-counter = 0  
+trial_counts = 0  
 nSteps  = int(Tf/Ts+1)
         
 t_all           = np.zeros(nSteps)                  # to store times
@@ -119,8 +119,8 @@ while round(t,3) < Tf:
     t += Ts
     i += 1
 
-    # wander the target 
-    target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
+    # # wander the target 
+    # target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
 
     # still working on this
     if round(trial_counter,5) < Tl:
@@ -153,6 +153,8 @@ while round(t,3) < Tf:
         # reset
         trial_counter = Ts
         trial_cost = 0
+        trial_counts += 1
+        print('trial ', trial_counts, 'done @:', round(t,2), 's' )
         
         # select new target (randomly)
         target = 10*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
@@ -164,6 +166,8 @@ while round(t,3) < Tf:
         explore_rate = np.maximum(0.995**t,0.001)-0.001
         #print(explore_rate)
         
+    # wander the target 
+    target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
 
 
     # controller (PD type)
