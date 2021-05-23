@@ -32,10 +32,12 @@ from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mar
 # --------------------
  
 Ti = 0.0        # initial time
-Tf = 2000         # final time 
+Tf = 1500         # final time 
 Ts = 0.1        # sample time
 Tz = 0.005      # integration step size
-verbose = 1     # print stuff?
+verbose = 0     # print stuff?
+plotsave = 1    # save the plot?
+
 
 state   = np.array([1.9, 0.1, 1, 0.2, 0.3, 0.4])   # format: [x, xdot, y, ydot, z, zdot]
 inputs  = np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
@@ -275,8 +277,12 @@ ani = animation.FuncAnimation(fig, update, np.arange(1, len(states_all)),interva
 #slow
 #ani2 = animation.FuncAnimation(fig, update, np.linspace(1, len(states_all), num=500, dtype=int),interval=15, blit=False)
 
-#ani.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
-#ani.save('animation.gif', writer=writer)
+
+if plotsave == 1:
+    if verbose == 1:
+        ani.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
+    else:
+        ani.save('animation.gif', writer=writer)
 
 
 #plt.show()
