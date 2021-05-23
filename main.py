@@ -126,7 +126,7 @@ while round(t,3) < Tf:
     if round(trial_counter,5) < Tl:
     
         # accumulate the cost
-        trial_cost += LA.norm(target-state[0:6:2])
+        trial_cost += LA.norm(target-state[0:6:2]) 
           
         # increment the counter 
         trial_counter += Ts
@@ -303,11 +303,12 @@ ax3.set_axes_locator(ip)
 #ax3.plot(t_all[1::],explore_rates_all[1::,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
 #ax3.plot(t_all[1::int(Tl/Ts)-1],explore_rates_all[1::int(Tl/Ts)-1,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
 ax3.plot(t_all[0::int(Tl/Ts)],explore_rates_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+#ax3.plot(t_all[0::int(Tl/Ts)],rewards_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+
 ax3.set_xlabel('Time [s]')
 ax3.set_ylabel('Explore Rate')
 ax3.set_xlim(0,max(t_all))
 ax3.set_ylim(0,1)
-
 
 plt.savefig('cost.png')
 # other stuff
@@ -315,3 +316,41 @@ plt.savefig('cost.png')
 #ax2.set_yticks(np.arange(0,2,0.4))
 #ax3.set_xticklabels(ax2.get_xticks(), backgroundcolor='w')
 #ax3.tick_params(axis='x', which='major', pad=8)
+
+#%%
+
+#%% Rewards
+
+# plot costs
+fig2, ax2 = plt.subplots()
+plt.title('Q-Learning Control Parameters')
+#ax2.plot(t_all[1::int(Tl/Ts)],costs_all[1::int(Tl/Ts),0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+#ax2.plot(t_all[1::],costs_all[1::,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+#ax2.plot(t_all[1::int(Tl/Ts)-1],costs_all[1::int(Tl/Ts)-1,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+ax2.plot(t_all[0::int(Tl/Ts)],costs_all[0::int(Tl/Ts),0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+ax2.set_xlabel('Time [s]')
+ax2.set_ylabel('Cost [m]')
+#ax2.legend(loc=0)
+ax2.set_xlim(0,max(t_all))
+ax2.set_ylim(0,max(costs_all))
+
+# create inset axis
+ax3 = plt.axes([0,0,1,1])
+# set position manually (x pos, y pos, x len, y len)
+ip = InsetPosition(ax2, [0.55,0.55,0.4,0.4])
+ax3.set_axes_locator(ip)
+# cool, make lines to point (save this for later)
+#mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
+# data
+#ax3.plot(t_all[1::int(Tl/Ts)],explore_rates_all[1::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+#ax3.plot(t_all[1::],explore_rates_all[1::,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+#ax3.plot(t_all[1::int(Tl/Ts)-1],explore_rates_all[1::int(Tl/Ts)-1,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+#ax3.plot(t_all[0::int(Tl/Ts)],explore_rates_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+ax3.plot(t_all[0::int(Tl/Ts)],rewards_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+
+ax3.set_xlabel('Time [s]')
+ax3.set_ylabel('Rewards')
+ax3.set_xlim(0,max(t_all))
+ax3.set_ylim(0,max(rewards_all))
+
+plt.savefig('rewards.png')
