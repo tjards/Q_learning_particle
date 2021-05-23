@@ -32,7 +32,7 @@ from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mar
 # --------------------
  
 Ti = 0.0        # initial time
-Tf = 1000         # final time 
+Tf = 2000         # final time 
 Ts = 0.1        # sample time
 Tz = 0.005      # integration step size
 
@@ -66,7 +66,7 @@ costs_all[0,:] = trial_cost
 nParams     = 2    # number of parameters to tune
 nOptions    = 10   # number of options to selection from (ranges between 0 and nOptions)
 scale       = 1    # scale the value of the options (i.e. scale*[0:nOptions])
-Tl          = 2    # length of trial [s]
+Tl          = 3    # length of trial [s]
 trial_counter = Ts  # initialize counter 
 trial_cost    = 0  # initialze cost 
 explore_rate  = 1  # how often to explore, 0 to 1 (start high, decrease)
@@ -161,7 +161,7 @@ while round(t,3) < Tf:
         target_rand2 = 5*random.uniform(-1, 1)
         
         # reduce the explore rate (floors at 0.001)
-        explore_rate = np.maximum(0.992**t,0.001)-0.001
+        explore_rate = np.maximum(0.995**t,0.001)-0.001
         #print(explore_rate)
         
 
