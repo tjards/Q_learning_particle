@@ -8,6 +8,11 @@ Model: double-integrator particle (3D)
 
 Created on Sat May 15 19:26:29 2021
 
+
+dev notes:
+    - pass learning rate in as parameter _
+
+
 @author: tjards
 """
 #%% Import stuff
@@ -25,6 +30,8 @@ import qLearnLib as QL
 from numpy import linalg as LA
 import random
 from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
+import pickle
+
 
 #%% Simulation Setup
 # --------------------
@@ -40,7 +47,7 @@ plotsave    = 0         # save animation (0 = no, 1 = yes), takes long time
 # ----------
 
 state       = np.array([1.9, 0.1, 1, 0.2, 0.3, 0.4])   # format: [x, xdot, y, ydot, z, zdot]
-inputs      = np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
+inputs      = 0*np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
 #target     = np.array([0.0,0.0,1.0])                 # format: [xr, yr, zr]
 target      = 10*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
 outputs     = np.array([state[0],state[2],state[4]])   # format: [x, y, z]
@@ -58,6 +65,8 @@ t_all               = np.zeros(nSteps)                 # to store times
 t_all[0]            = Ti                                
 states_all          = np.zeros([nSteps, len(state)])   # to store states
 states_all[0,:]     = state                             
+inputs_all          = np.zeros([nSteps, len(inputs)])   # to store states
+inputs_all[0,:]     = inputs                            
 targets_all         = np.zeros([nSteps, len(target)])  # to store targets
 targets_all[0,:]    = target                          
 rewards_all         = np.zeros([nSteps, 1])            # to store rewards
@@ -112,16 +121,27 @@ def dynamics(state, t, inputs):
 
 while round(t,3) < Tf:
 
-    # evolve the states through the dynamics
-    state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]
-
+    
     # store results
     t_all[i]                = t
     states_all[i,:]         = state
+    inputs_all[i,:]         = inputs 
     targets_all[i,:]        = target
     rewards_all[i,:]        = reward       
     costs_all[i,:]          = trial_cost 
-    explore_rates_all[i,:]  = explore_rate                      
+    explore_rates_all[i,:]  = explore_rate 
+
+    # evolve the states through the dynamics
+    state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]
+
+    # # store results
+    # t_all[i]                = t
+    # states_all[i,:]         = state
+    # inputs_all[i,:]         = inputs 
+    # targets_all[i,:]        = target
+    # rewards_all[i,:]        = reward       
+    # costs_all[i,:]          = trial_cost 
+    # explore_rates_all[i,:]  = explore_rate                      
 
     # increment 
     t += Ts
@@ -137,6 +157,8 @@ while round(t,3) < Tf:
           
         # increment the counter 
         trial_counter += Ts
+        
+        #reward = 0
     
     # if trial is over, compute rewards
     # ---------------------------------
@@ -144,7 +166,7 @@ while round(t,3) < Tf:
     else: 
               
         #compute the reward (cost normalized over Tl)
-        reward = 1/np.maximum(trial_cost/Tl,0.00001)
+        reward = 1/np.maximum(trial_cost/Tl,0.00001) # protect div by zero
         
         #update the Q table
         Q = QL.update(Q,0,kp_i,1,reward)
@@ -188,6 +210,18 @@ for k in range(0,nParams):
     print('Best parameter ', k, ' is: ', np.argmax(Q[k,:]),' with ', np.max(Q[k,:]))
 
 print('Final Explore Rate: ', explore_rate)
+
+
+# %% Save data for DNN
+
+# output in discrete model form for DNN
+DNN_outs = states_all[1::,:]                                    # these are the "next states" (i.e. x_k+1)
+DNN_ins = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:]))    # these are the "current states" and "current inputs"
+
+with open('Data/states.pkl','wb') as outs:
+    pickle.dump(DNN_outs,outs, pickle.HIGHEST_PROTOCOL)
+with open('Data/inputs.pkl','wb') as ins:
+    pickle.dump(DNN_ins,ins, pickle.HIGHEST_PROTOCOL)
 
 
 
