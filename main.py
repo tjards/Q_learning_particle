@@ -32,12 +32,13 @@ import random
 from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
 import pickle
 
+#random.seed(0)
 
 #%% Simulation Setup
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 1500      # final time 
+Tf          = 3000      # final time 
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
@@ -80,13 +81,14 @@ explore_rates_all   = np.zeros([nSteps, 1])            # to store explore rates
 # ----------------
 
 nParams         = 2    # number of parameters to tune
-nOptions        = 10   # number of options to selection from (ranges between 0 and nOptions)
+nOptions        = 15   # number of options to selection from (ranges between 0 and nOptions)
 scale           = 1    # scale the value of the options (i.e. scale*[0:nOptions])
 Tl              = 3    # length of trial [s]
 trial_counter   = Ts   # initialize counter (in-trial)
 trial_cost      = 0    # initialze cost 
 trial_counts    = 0    # total number of trials
 explore_rate    = 1    # how often to explore, 0 to 1 (start high, decrease)
+epsilon         = 0.997                     # explore rate of change (->0 faster)
 Q               = QL.init(nParams,nOptions) # this is the Q-table 
 
 # randomly select first parameters
@@ -152,9 +154,10 @@ while round(t,3) < Tf:
     
     if round(trial_counter,5) < Tl:
     
-        # accumulate the cost
-        trial_cost += LA.norm(target-state[0:6:2]) 
-          
+        # accumulate the cost (position + velocity component)
+        trial_cost += LA.norm(target-state[0:6:2])/Tl - ((LA.norm(target-state[0:6:2])-LA.norm(error)))/Tl
+
+        
         # increment the counter 
         trial_counter += Ts
         
@@ -166,7 +169,7 @@ while round(t,3) < Tf:
     else: 
               
         #compute the reward (cost normalized over Tl)
-        reward = 1/np.maximum(trial_cost/Tl,0.00001) # protect div by zero
+        reward = 1/np.maximum(trial_cost,0.00001) # protect div by zero
         
         #update the Q table
         Q = QL.update(Q,0,kp_i,1,reward)
@@ -192,7 +195,7 @@ while round(t,3) < Tf:
         target_rand2 = 5*random.uniform(-1, 1)
         
         # reduce the explore rate (floors at 0.001)
-        explore_rate = np.maximum(0.995**t,0.001)-0.001
+        explore_rate = np.maximum(epsilon**t,0.001)-0.001
         
     # wander the target (according this this trial's random parameters)
     target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
@@ -299,10 +302,14 @@ if plotsave == 1:
 
 #%% Costs
 
+starts = 2*int(Tl/Ts)-1
+segments = int(Tl/Ts)
+polyfit_n = 1
+
 # plot costs
 fig2, ax2 = plt.subplots()
 plt.title('Q-Learning Control Parameters')
-ax2.plot(t_all[0::int(Tl/Ts)],costs_all[0::int(Tl/Ts),0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
 ax2.set_xlabel('Time [s]')
 ax2.set_ylabel('Cost [m]')
 ax2.set_xlim(0,max(t_all))
@@ -316,7 +323,7 @@ ax3.set_axes_locator(ip)
 # cool, make lines to point (save this for later)
 #mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
 # data
-ax3.plot(t_all[0::int(Tl/Ts)],explore_rates_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+ax3.plot(t_all[starts::segments],explore_rates_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
 #ax3.plot(t_all[0::int(Tl/Ts)],rewards_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
 
 ax3.set_xlabel('Time [s]')
@@ -332,12 +339,18 @@ plt.savefig('cost.png')
 # plot costs
 fig2, ax2 = plt.subplots()
 plt.title('Q-Learning Control Parameters')
-ax2.plot(t_all[0::int(Tl/Ts)],costs_all[0::int(Tl/Ts),0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
 ax2.set_xlabel('Time [s]')
 ax2.set_ylabel('Cost [m]')
 #ax2.legend(loc=0)
 ax2.set_xlim(0,max(t_all))
 ax2.set_ylim(0,max(costs_all))
+
+#best fit line
+cost_fit = np.polyfit(t_all[starts::segments], costs_all[starts::segments,0], polyfit_n)
+p_cost_fit = np.poly1d(cost_fit)
+ax2.plot(t_all[starts::segments], p_cost_fit(t_all[starts::segments]), 'k-')
+
 
 # create inset axis
 ax3 = plt.axes([0,0,1,1])
@@ -347,7 +360,14 @@ ax3.set_axes_locator(ip)
 # cool, make lines to point (save this for later)
 #mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
 # data
-ax3.plot(t_all[0::int(Tl/Ts)],rewards_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+ax3.plot(t_all[starts::segments],rewards_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+#ax3.plot(t_all[0::int(Tl/Ts)],test,'--', c='k', mew=2, alpha=0.8,label='Rewards')
+
+#best fit line
+reward_fit = np.polyfit(t_all[starts::segments], rewards_all[starts::segments,0], polyfit_n)
+p_reward_fit = np.poly1d(reward_fit)
+ax3.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
+#plt.show()
 
 ax3.set_xlabel('Time [s]')
 ax3.set_ylabel('Rewards')
@@ -355,3 +375,27 @@ ax3.set_xlim(0,max(t_all))
 ax3.set_ylim(0,max(rewards_all))
 
 plt.savefig('rewards.png')
+
+
+# plot costs
+fig2, ax2 = plt.subplots()
+plt.title('Q-Learning Control Parameters')
+ax2.set_xlabel('Time [s]')
+ax2.set_ylabel('Cost [m]')
+# data
+ax2.plot(t_all[starts::segments],rewards_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+#ax3.plot(t_all[0::int(Tl/Ts)],test,'--', c='k', mew=2, alpha=0.8,label='Rewards')
+
+#best fit line
+reward_fit = np.polyfit(t_all[starts::segments], rewards_all[starts::segments,0], polyfit_n)
+p_reward_fit = np.poly1d(reward_fit)
+ax2.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
+#plt.show()
+
+ax2.set_xlabel('Time [s]')
+ax2.set_ylabel('Rewards')
+ax2.set_xlim(0,max(t_all))
+ax2.set_ylim(0,max(rewards_all))
+
+plt.savefig('rewards2.png')
+
