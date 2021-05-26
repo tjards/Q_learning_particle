@@ -73,7 +73,7 @@ def train(X, Y, architecture, learning_rate, num_iterations, print_cost=True, fc
         # Print the cost every "print_rate" training example
         if print_progress == 1:
             if print_cost and i % print_rate == 0:
-                print ("Cost after iteration %i: %f" %(i, cost))
+                print ("DNN cost after iteration %i: %f" %(i, cost))
             if print_cost and i % print_rate == 0:
                 costs.append(cost)
                 

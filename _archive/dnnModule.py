@@ -35,22 +35,18 @@ import matplotlib.pyplot as plt
 # ----------
 
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
-print_progress  = 1      # 1 = yes, 0 = no
+print_progress  = 0      # 1 = yes, 0 = no
 print_rate      = 100    # rate at which to print results (default 100)
 
 
 #%% Main training function 
 # ------------------------
  
-def train(X, Y, architecture, learning_rate, num_iterations, print_cost=True, fcost='x-entropy', initialization = 'random'):
+def train(X, Y, architecture, learning_rate, num_iterations, print_cost=True, fcost='x-entropy'):
 
     # initialize
-    costs = []
-               
-    if initialization == 'random':              
-        parameters = init_params(architecture)
-    else:
-        parameters = initialization
+    costs = []                         
+    parameters = init_params(architecture)
     
     # Run gradient descent 
     for i in range(0, num_iterations):

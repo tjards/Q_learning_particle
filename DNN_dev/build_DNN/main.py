@@ -12,6 +12,7 @@ import dnnModule as dnn
 import pickle
 import pandas as pd
 
+
 #%% PREPARE the data
 # ------------------------
 
@@ -64,12 +65,19 @@ fcost = 'mse' #'x-entropy'          # x-entropy or mse
 
 #%% Training a DNN on the training set
 # ------------------------------------
-parameters = dnn.train(train_x, train_y, architecture, learning_rate, num_iterations, print_cost=True,fcost=fcost)
+
+# load initial parameters
+file_initial_parameters = open("initial_params.pkl","rb")
+initial_parameters = pickle.load(file_initial_parameters)
+file_initial_parameters.close()
+
+parameters = dnn.train(train_x, train_y, architecture, learning_rate, num_iterations, print_cost=True, fcost=fcost, initialization = 'random')
 
 # save the parameters to file
 file_params = open("network_params.pkl","wb")
 pickle.dump(parameters,file_params)
 file_params.close()
+
 
 
 #%% PREDICT on the test set

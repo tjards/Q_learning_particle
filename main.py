@@ -31,6 +31,7 @@ from numpy import linalg as LA
 import random
 from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
 import pickle
+import dnnModule as dnn
 
 #random.seed(0)
 
@@ -38,7 +39,7 @@ import pickle
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 3000      # final time 
+Tf          = 1000      # final time 
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
@@ -57,7 +58,7 @@ trial_cost  = LA.norm(error)
 reward      = 1/LA.norm(error)
 t           = Ti
 i           = 1
-nSteps          = int(Tf/Ts+1)
+nSteps      = int(Tf/Ts+1)
    
 # storage
 # -------
@@ -74,8 +75,7 @@ rewards_all         = np.zeros([nSteps, 1])            # to store rewards
 rewards_all[0,:]    = reward
 costs_all           = np.zeros([nSteps, 1])            # to store costs
 costs_all[0,:]      = trial_cost
-explore_rates_all   = np.zeros([nSteps, 1])            # to store explore rates
-
+explore_rates_all   = np.zeros([nSteps, 1])            # to store explore rates                            
 
 # Q learning stuff
 # ----------------
@@ -101,6 +101,32 @@ target_rand0 = 5*random.uniform(-1, 1)      # used for pseudo-random path gen
 target_rand1 = 5*random.uniform(-1, 1)
 target_rand2 = 5*random.uniform(-1, 1)
 
+# Deep Neural Network stuff
+# -------------------------
+
+mini_batch_size     = int(100/Ts)       # divide by Ts to define in seconds
+mini_batch_counts   = int(-100/Ts)
+
+# import the initial parameters for the DNN
+file_initial_parameters = open("initial_params.pkl","rb")
+initial_parameters = pickle.load(file_initial_parameters)
+file_initial_parameters.close()
+#DNN_parameters = initial_parameters.copy()
+DNN_parameters = 'random'
+
+# initialize the DNN data
+#DNN_outs = states_all[1::,:]                                    # these are the "next states" (i.e. x_k+1)
+#DNN_ins = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:]))    # these are the "current states" and "current inputs"
+scale_outs_n = np.array([23.3097,309.206,31.1158,256.741,25.1831,194.058])
+scale_ins_n = np.array([24.7144, 309.206, 31.1158, 256.741, 27.9044, 250.66, 3137.21, 2679.5, 2522.73])
+train_x = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
+train_y = states_all[1::,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+
+# store DNN predicted states (ghosts)
+ghosts_all          = np.zeros([nSteps, len(state)])   # to store ghosts
+ghosts_all[0,:]     = state 
+
+
 #%% Define the agent dynamics
 # ---------------------------
 
@@ -123,8 +149,9 @@ def dynamics(state, t, inputs):
 
 while round(t,3) < Tf:
 
-    
+      
     # store results
+    # -------------
     t_all[i]                = t
     states_all[i,:]         = state
     inputs_all[i,:]         = inputs 
@@ -133,17 +160,44 @@ while round(t,3) < Tf:
     costs_all[i,:]          = trial_cost 
     explore_rates_all[i,:]  = explore_rate 
 
-    # evolve the states through the dynamics
-    state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]
 
-    # # store results
-    # t_all[i]                = t
-    # states_all[i,:]         = state
-    # inputs_all[i,:]         = inputs 
-    # targets_all[i,:]        = target
-    # rewards_all[i,:]        = reward       
-    # costs_all[i,:]          = trial_cost 
-    # explore_rates_all[i,:]  = explore_rate                      
+    # model the system with a DNN (by minibatches)
+    # ---------------------------
+    
+    if mini_batch_counts == mini_batch_size:  
+        
+        # build the training set
+        train_x = np.hstack((states_all[i-mini_batch_size-1:i-1,:],inputs_all[i-mini_batch_size-1:i-1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
+        train_y = states_all[i-mini_batch_size:i,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+        
+        # define hyper-parameters
+        n_x = train_x.shape[0]              # number of input features
+        n_y = train_y.shape[0]              # number of outputs
+        architecture = [n_x,6,n_y]           # model size [input, ..., hidden nodes, ... ,output]
+        learning_rate = 0.1                # learning rate (< 1.0)
+        num_iterations = 1000               # number of iterations
+        #np.random.seed(1) 
+        fcost = 'mse' #'x-entropy'          # x-entropy or mse
+        
+        # train
+        DNN_parameters = dnn.train(train_x, train_y, architecture, learning_rate, num_iterations, print_cost=True, fcost=fcost, initialization = DNN_parameters)
+        
+        # test set (ghosts)
+        ghosts_all[i-mini_batch_size-1:i-mini_batch_size,:] = states_all[i-mini_batch_size-1:i-mini_batch_size,:]
+        for k in range(i-mini_batch_size-1,i-1):
+            
+            test_x_k = np.hstack((ghosts_all[k:k+1,:],inputs_all[k:k+1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
+            test_y_k = states_all[k:k+1,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+            ghosts_all[k+1:k+2,:] = dnn.predict(test_x_k, test_y_k, DNN_parameters).transpose()
+            
+        # reset batch count
+        mini_batch_counts = 0 
+    
+    mini_batch_counts += 1
+
+
+    # evolve the states through the dynamics
+    state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]                      
 
     # increment 
     t += Ts
@@ -209,6 +263,11 @@ while round(t,3) < Tf:
     
 # %% Results
 # -----------
+
+# rescale the ghosts
+ghosts_all[:,:] = ghosts_all[:,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
+
+
 for k in range(0,nParams):
     print('Best parameter ', k, ' is: ', np.argmax(Q[k,:]),' with ', np.max(Q[k,:]))
 
@@ -227,11 +286,12 @@ with open('Data/inputs.pkl','wb') as ins:
     pickle.dump(DNN_ins,ins, pickle.HIGHEST_PROTOCOL)
 
 
-
 # Plots 
 # -----
 
 #%% Trajectory animation
+
+inset = 0
 
 fig = plt.figure()
 ax = p3.Axes3D(fig)
@@ -244,48 +304,55 @@ ax.set_zlim3d([-axis, axis])
 
 line, = ax.plot([], [],[], 'bo-',ms=10, lw=2)
 line_target, = ax.plot([], [],[], 'ro-', ms=5, lw=2)
+line_ghost, = ax.plot([], [],[], 'mo-',ms=10, lw=2)
 
 time_template = 'Time = %.1f/%.0fs'
 time_text = ax.text2D(0.05, 0.95, '', transform=ax.transAxes)
 time_text2 = ax.text2D(0.65, 0.95, 'Q-Learning Control', transform=ax.transAxes)
 time_text3 = ax.text2D(0.65, 0.90, 'Controller: PD', transform=ax.transAxes)
 
-ax4 = plt.axes([0,0,1,1])
-# set position manually (x pos, y pos, x len, y len)
-ip = InsetPosition(ax, [0,0.7,0.2,0.2])
-ax4.set_axes_locator(ip)
-# cool, make lines to point (save this for later)
-#mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
-# data
-line2, = ax4.plot([], [], '--', c='b', mew=2, alpha=0.8,label='Cost')
 
-ax5 = ax4.twinx()
-ax5.set_axes_locator(ip)
-# data
-line3, = ax4.plot([], [], '-', c='g', mew=2, alpha=0.8,label='Explore')
+if inset == 1:
 
-ax4.set_ylabel('Cost')
-ax4.set_xlim(0,max(t_all))
-ax4.set_ylim(0,1)
-ax4.tick_params(axis='y', labelcolor='b')
-
-ax5.set_ylabel('Explore Rate')
-ax5.set_xlim(0,max(t_all))
-ax5.set_ylim(0,1)
-ax5.tick_params(axis='y', labelcolor='g')
+    ax4 = plt.axes([0,0,1,1])
+    # set position manually (x pos, y pos, x len, y len)
+    ip = InsetPosition(ax, [0,0.7,0.2,0.2])
+    ax4.set_axes_locator(ip)
+    # cool, make lines to point (save this for later)
+    #mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
+    # data
+    line2, = ax4.plot([], [], '--', c='b', mew=2, alpha=0.8,label='Cost')
+    
+    ax5 = ax4.twinx()
+    ax5.set_axes_locator(ip)
+    # data
+    line3, = ax4.plot([], [], '-', c='g', mew=2, alpha=0.8,label='Explore')
+    
+    ax4.set_ylabel('Cost')
+    ax4.set_xlim(0,max(t_all))
+    ax4.set_ylim(0,1)
+    ax4.tick_params(axis='y', labelcolor='b')
+    
+    ax5.set_ylabel('Explore Rate')
+    ax5.set_xlim(0,max(t_all))
+    ax5.set_ylim(0,1)
+    ax5.tick_params(axis='y', labelcolor='g')
 
 def update(i):
     line.set_data(states_all[i,0],states_all[i,2])
     line.set_3d_properties(states_all[i,4])
     line_target.set_data(targets_all[i,0],targets_all[i,1])
     line_target.set_3d_properties(targets_all[i,2])
+    line_ghost.set_data(ghosts_all[i,0],ghosts_all[i,1])
+    line_ghost.set_3d_properties(ghosts_all[i,2])
     time_text.set_text(time_template%(i*Ts,Tf))
     #text_reward.set_text(reward_template%rewards_all[i])
-    line2.set_data(t_all[0:i],(1/float(max(costs_all[0:i])))*costs_all[0:i,0])
-    ax4.set_xlim(0,t_all[i]+1)
-    line3.set_data(t_all[0:i],(1/float(max(explore_rates_all[0:i])))*explore_rates_all[0:i,0])
-    ax5.set_xlim(0,t_all[i]+1)
-    return line, line2, line3, time_text
+    if inset == 1:
+        line2.set_data(t_all[0:i],(1/float(max(costs_all[0:i])))*costs_all[0:i,0])
+        ax4.set_xlim(0,t_all[i]+1)
+        line3.set_data(t_all[0:i],(1/float(max(explore_rates_all[0:i])))*explore_rates_all[0:i,0])
+        ax5.set_xlim(0,t_all[i]+1)
+    return line, time_text
 
 #fast
 ani = animation.FuncAnimation(fig, update, np.arange(1, len(states_all)),interval=15, blit=False)
@@ -398,4 +465,13 @@ ax2.set_xlim(0,max(t_all))
 ax2.set_ylim(0,max(rewards_all))
 
 plt.savefig('rewards2.png')
+
+#%%
+
+# fig2, ax2 = plt.subplots()
+# ax2.set_xlabel('Time [s]')
+# ax2.set_ylabel('Pos [m]')
+# # data
+# ax2.plot(t_all[1001:9000],states_all[1001:9000,0],'--', c='k', mew=2, alpha=0.8)
+# ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
 
