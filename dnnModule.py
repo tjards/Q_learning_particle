@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 # ----------
 
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
-print_progress  = 1      # 1 = yes, 0 = no
+print_progress  = 0      # 1 = yes, 0 = no
 print_rate      = 100    # rate at which to print results (default 100)
 
 

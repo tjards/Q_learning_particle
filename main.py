@@ -39,7 +39,7 @@ import dnnModule as dnn
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 1000      # final time 
+Tf          = 3001      # final time 
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
@@ -59,6 +59,13 @@ reward      = 1/LA.norm(error)
 t           = Ti
 i           = 1
 nSteps      = int(Tf/Ts+1)
+
+# constaints
+# ----------
+
+#umax = 100
+#vmax = 100
+
    
 # storage
 # -------
@@ -104,8 +111,8 @@ target_rand2 = 5*random.uniform(-1, 1)
 # Deep Neural Network stuff
 # -------------------------
 
-mini_batch_size     = int(100/Ts)       # divide by Ts to define in seconds
-mini_batch_counts   = int(-100/Ts)
+mini_batch_size     = int(1000/Ts)       # divide by Ts to define in seconds
+mini_batch_counts   = -1 #int(-1000/Ts)
 
 # import the initial parameters for the DNN
 file_initial_parameters = open("initial_params.pkl","rb")
@@ -117,8 +124,20 @@ DNN_parameters = 'random'
 # initialize the DNN data
 #DNN_outs = states_all[1::,:]                                    # these are the "next states" (i.e. x_k+1)
 #DNN_ins = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:]))    # these are the "current states" and "current inputs"
-scale_outs_n = np.array([23.3097,309.206,31.1158,256.741,25.1831,194.058])
-scale_ins_n = np.array([24.7144, 309.206, 31.1158, 256.741, 27.9044, 250.66, 3137.21, 2679.5, 2522.73])
+
+
+# scaling - manual
+#scale_outs_n = np.array([23.3097,309.206,31.1158,256.741,25.1831,194.058])
+#scale_ins_n = np.array([24.7144, 309.206, 31.1158, 256.741, 27.9044, 250.66, 3137.21, 2679.5, 2522.73])
+
+# scaling - none
+scale_outs_n = np.array([1,1,1,1,1,1])
+scale_ins_n = np.array([1,1,1,1,1,1,1,1,1])
+
+# scaling - auto
+#scale_ins_n = np.amax(abs(train_x),axis = 1)
+#scale_outs_n = np.amax(abs(train_y),axis = 1)
+
 train_x = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
 train_y = states_all[1::,:].transpose()/np.reshape(scale_outs_n, (-1,1))
 
@@ -140,6 +159,12 @@ def dynamics(state, t, inputs):
     state_dot[3] = inputs[1]    # yddot (acceleration)
     state_dot[4] = state[5]     # zdot
     state_dot[5] = inputs[2]    # zddot (acceleration)
+    
+    #apply constraints
+    #state_dot[1]=np.maximum(np.minimum(state_dot[1],vmax),-vmax)
+    #state_dot[3]=np.maximum(np.minimum(state_dot[3],vmax),-vmax)
+    #state_dot[5]=np.maximum(np.minimum(state_dot[5],vmax),-vmax)
+    
     
     return state_dot
 
@@ -164,18 +189,38 @@ while round(t,3) < Tf:
     # model the system with a DNN (by minibatches)
     # ---------------------------
     
-    if mini_batch_counts == mini_batch_size:  
+    if mini_batch_counts == mini_batch_size:
+        
+        print('DNN w/new minibatch at i= ',i-mini_batch_size-1,' of size ',mini_batch_size)
+        
+        # ranges
+        batch_start  =   i-mini_batch_size-1
+        batch_end    =   i-1
         
         # build the training set
-        train_x = np.hstack((states_all[i-mini_batch_size-1:i-1,:],inputs_all[i-mini_batch_size-1:i-1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
-        train_y = states_all[i-mini_batch_size:i,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+        #train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
+        #train_y = states_all[batch_start+1:batch_end+1,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+        train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()
+        train_y = states_all[batch_start+1:batch_end+1,:].transpose()
+        
+        #redefine the scaling
+        scale_ins_n = np.amax(abs(train_x),axis = 1)
+        scale_outs_n = np.amax(abs(train_y),axis = 1)
+        
+        # now scale them
+        train_x = train_x/np.reshape(scale_ins_n, (-1,1))
+        train_y = train_y/np.reshape(scale_outs_n, (-1,1))
+        
+        # scale all ghosts
+        ghosts_all[:,:] = ghosts_all[:,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+        
         
         # define hyper-parameters
         n_x = train_x.shape[0]              # number of input features
         n_y = train_y.shape[0]              # number of outputs
         architecture = [n_x,6,n_y]           # model size [input, ..., hidden nodes, ... ,output]
         learning_rate = 0.1                # learning rate (< 1.0)
-        num_iterations = 1000               # number of iterations
+        num_iterations = 3000               # number of iterations
         #np.random.seed(1) 
         fcost = 'mse' #'x-entropy'          # x-entropy or mse
         
@@ -183,16 +228,20 @@ while round(t,3) < Tf:
         DNN_parameters = dnn.train(train_x, train_y, architecture, learning_rate, num_iterations, print_cost=True, fcost=fcost, initialization = DNN_parameters)
         
         # test set (ghosts)
-        ghosts_all[i-mini_batch_size-1:i-mini_batch_size,:] = states_all[i-mini_batch_size-1:i-mini_batch_size,:]
-        for k in range(i-mini_batch_size-1,i-1):
+        ghosts_all[batch_start:batch_start+1,:] = states_all[batch_start:batch_start+1,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+        for k in range(batch_start,batch_end):
             
             test_x_k = np.hstack((ghosts_all[k:k+1,:],inputs_all[k:k+1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
-            test_y_k = states_all[k:k+1,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+            test_y_k = states_all[k+1:k+2,:].transpose()/np.reshape(scale_outs_n, (-1,1))
             ghosts_all[k+1:k+2,:] = dnn.predict(test_x_k, test_y_k, DNN_parameters).transpose()
             
+        # now unscale
+        #ghosts_all[batch_start:batch_end+1,:] = ghosts_all[batch_start:batch_end+1,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
+        ghosts_all[:,:] = ghosts_all[:,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
+              
         # reset batch count
-        mini_batch_counts = 0 
-    
+        mini_batch_counts = 0
+        
     mini_batch_counts += 1
 
 
@@ -259,13 +308,19 @@ while round(t,3) < Tf:
     derror = (1/Ts)*(error - (outputs-target))
     error = outputs-target
     inputs = - kp*(error) + kd*(derror)
+    
+    #apply constraints
+    #inputs[0]=np.maximum(np.minimum(inputs[0],vmax),-vmax)
+    #inputs[1]=np.maximum(np.minimum(inputs[1],vmax),-vmax)
+    #inputs[2]=np.maximum(np.minimum(inputs[2],vmax),-vmax)
+    
    
     
 # %% Results
 # -----------
 
 # rescale the ghosts
-ghosts_all[:,:] = ghosts_all[:,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
+#ghosts_all[:,:] = ghosts_all[:,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
 
 
 for k in range(0,nParams):
@@ -468,10 +523,18 @@ plt.savefig('rewards2.png')
 
 #%%
 
-# fig2, ax2 = plt.subplots()
-# ax2.set_xlabel('Time [s]')
-# ax2.set_ylabel('Pos [m]')
-# # data
-# ax2.plot(t_all[1001:9000],states_all[1001:9000,0],'--', c='k', mew=2, alpha=0.8)
-# ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
+fig2, ax2 = plt.subplots()
+#ax2.set_xlabel('Time [s]')
+#ax2.set_ylabel('Pos [m]')
+# data
+#ax2.plot(t_all[1001:9000],states_all[1001:9000,0],'--', c='k', mew=2, alpha=0.8)
+#ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
+
+#ax2.plot(states_all[8501:9000,0],states_all[8501:9000,2],'--k',ghosts_all[8501:9000,0],ghosts_all[8501:9000,2],'--r')
+#ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
+#ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
+
+ax2.plot(t_all[:],states_all[:,0],'--k',t_all[:],ghosts_all[:,0],'--r')
+
+#ax2.plot(states_all[10000:2*10000,0],states_all[10000:2*10000,2],'--k',ghosts_all[10000:2*10000,0],ghosts_all[10000:2*10000,2],'--r')
 
