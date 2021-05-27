@@ -39,7 +39,7 @@ import dnnModule as dnn
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 3001      # final time 
+Tf          = 5001      # final time 
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
@@ -63,7 +63,7 @@ nSteps      = int(Tf/Ts+1)
 # constaints
 # ----------
 
-umax = 10
+#umax = 10
 #vmax = 100
 
    
@@ -201,6 +201,10 @@ while round(t,3) < Tf:
         batch_start  =   i-mini_batch_size-1
         batch_end    =   i-1
         
+        # Travis: try modelling deltas, rather than actuals
+        #           this may pseudo-normalize things
+        
+        
         # build the training set
         #train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
         #train_y = states_all[batch_start+1:batch_end+1,:].transpose()/np.reshape(scale_outs_n, (-1,1))
@@ -227,8 +231,9 @@ while round(t,3) < Tf:
         n_x = train_x.shape[0]              # number of input features
         n_y = train_y.shape[0]              # number of outputs
         architecture = [n_x,6,n_y]           # model size [input, ..., hidden nodes, ... ,output]
-        learning_rate = 0.2                # learning rate (< 1.0)
-        num_iterations = 3000               # number of iterations
+        architecture = [n_x,6,n_y]
+        learning_rate = 0.1                # learning rate (< 1.0)
+        num_iterations = 2500               # number of iterations
         #np.random.seed(1) 
         fcost = 'mse' #'x-entropy'          # x-entropy or mse
         
@@ -237,6 +242,8 @@ while round(t,3) < Tf:
         
         # Run a mini simulation using these parameters
         # --------------------------------------------
+        
+        ### ~~~~~~~~~~~~~~~~~~ counterfactiual dream land ~~~~~~~~~~~~~~~~ ###
         
         # initialize test-set with actual states (will be replaced with predictions)
         test_x = train_x # already normalized
@@ -287,6 +294,8 @@ while round(t,3) < Tf:
         
         # reset batch count
         mini_batch_counts = 0
+        
+        ### ~~~~~~~~~~~~~~~~~~ counterfactiual dream land ~~~~~~~~~~~~~~~~ ###
         
     mini_batch_counts += 1
 
@@ -356,9 +365,9 @@ while round(t,3) < Tf:
     inputs = - kp*(error) + kd*(derror)
     
     #apply constraints
-    inputs[0]=np.maximum(np.minimum(inputs[0],umax),-umax)
-    inputs[1]=np.maximum(np.minimum(inputs[1],umax),-umax)
-    inputs[2]=np.maximum(np.minimum(inputs[2],umax),-umax)
+    #inputs[0]=np.maximum(np.minimum(inputs[0],umax),-umax)
+    #inputs[1]=np.maximum(np.minimum(inputs[1],umax),-umax)
+    #inputs[2]=np.maximum(np.minimum(inputs[2],umax),-umax)
     
    
     
@@ -579,8 +588,8 @@ fig2, ax2 = plt.subplots()
 #ax2.plot(states_all[8501:9000,0],states_all[8501:9000,2],'--k',ghosts_all[8501:9000,0],ghosts_all[8501:9000,2],'--r')
 #ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
 #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
-begin = 20001
-ending = begin+1000
+begin = 40001
+ending = begin+300
 var = 0
 
 ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
