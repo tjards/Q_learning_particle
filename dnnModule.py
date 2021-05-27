@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 # ----------
 
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
-print_progress  = 0      # 1 = yes, 0 = no
+print_progress  = 1      # 1 = yes, 0 = no
 print_rate      = 100    # rate at which to print results (default 100)
 
 
@@ -373,7 +373,7 @@ def predict(X, y, parameters):
     #print ("predictions: " + str(p))
     #print ("true labels: " + str(y))
     #print("Accuracy: "  + str(np.sum((p == y)/m)))
-    print("Avg Error ", (1/m)*np.sum(np.power(probas.flatten()-y.flatten(),2)))
+    #print("Avg Error ", (1/m)*np.sum(np.power(probas.flatten()-y.flatten(),2)))
         
     return probas
 
