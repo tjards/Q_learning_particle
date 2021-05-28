@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 # ----------
 
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
-print_progress  = 1      # 1 = yes, 0 = no
+print_progress  = 2      # 1 = yes, 0 = no, 2 = yes but no plots
 print_rate      = 100    # rate at which to print results (default 100)
 output_act      = 'tanh'
 
@@ -72,7 +72,7 @@ def train(X, Y, architecture, learning_rate, num_iterations, print_cost=True, fc
         parameters = update(parameters, grads, learning_rate)
                 
         # Print the cost every "print_rate" training example
-        if print_progress == 1:
+        if print_progress == 1 or print_progress == 2 :
             if print_cost and i % print_rate == 0:
                 print ("DNN cost after iteration %i: %f" %(i, cost))
             if print_cost and i % print_rate == 0:

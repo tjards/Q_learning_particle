@@ -226,9 +226,14 @@ while round(t,3) < Tf:
             #define the scaling (wag, based on max/min of values)
             scale_ins_n = np.amax(abs(train_x),axis = 1)
             #scale_outs_n = np.amax(abs(train_y),axis = 1)
-            
             scale_outs_n=np.array([xmax,vmax,xmax,vmax,xmax,vmax])
             
+            # double-check the constraints make sense
+            if scale_ins_n[0:train_y.shape[0]].any() != scale_outs_n.any():
+                print('Warning: Possible error with scaling')
+                print('... or states/inputs modes not fully excited')
+            else:
+                print('Note: Scaling done, all modes sufficiently excited in this batch')
             #scale_outs_n = np.array([1,1,1,1,1,1])
             #scale_ins_n = np.array([1,1,1,1,1,1,1,1,1])
             ghosts_all[0,:] = states_all[0,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
@@ -248,7 +253,7 @@ while round(t,3) < Tf:
         architecture = [n_x,6,n_y]           # model size [input, ..., hidden nodes, ... ,output]
         architecture = [n_x,6,n_y]
         learning_rate = 0.1                # learning rate (< 1.0)
-        num_iterations = 2500               # number of iterations
+        num_iterations = 2000               # number of iterations
         #np.random.seed(1) 
         fcost = 'mse' #'x-entropy'          # x-entropy or mse
         
@@ -338,7 +343,6 @@ while round(t,3) < Tf:
     state[3]=np.maximum(np.minimum(state[3],vmax),-vmax)
     state[5]=np.maximum(np.minimum(state[5],vmax),-vmax)
     
-
     #state[0]=np.maximum(np.minimum(state[0],xmax),-xmax)
     #state[2]=np.maximum(np.minimum(state[2],xmax),-xmax)
     #state[4]=np.maximum(np.minimum(state[4],xmax),-xmax)
@@ -632,12 +636,12 @@ fig2, ax2 = plt.subplots()
 #ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
 #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
 begin = 40001
-ending = begin+50
+ending = begin+500
 var = 1
 
 
-ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
-#ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r',t_all[begin:ending],inputs_all[begin:ending,0], '--m')
+#ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
+ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r',t_all[begin:ending],inputs_all[begin:ending,0], '--m')
 fig2.legend(['states', 'ghosts', 'inputs'])
 #ax2.plot(states_all[10000:2*10000,0],states_all[10000:2*10000,2],'--k',ghosts_all[10000:2*10000,0],ghosts_all[10000:2*10000,2],'--r')
 
