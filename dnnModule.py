@@ -37,6 +37,7 @@ import matplotlib.pyplot as plt
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
 print_progress  = 1      # 1 = yes, 0 = no
 print_rate      = 100    # rate at which to print results (default 100)
+output_act      = 'tanh'
 
 
 #%% Main training function 
@@ -234,7 +235,7 @@ def forward_prop(X, parameters):
         caches.append(cache)
     
     # output layer is linear 
-    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], activation = "lin")
+    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], activation = output_act)
     
     # save outlayer, too
     caches.append(cache)
@@ -325,7 +326,7 @@ def backward_prop(AL, Y, caches, fcost):
         dAL = 2*np.subtract(AL,Y)
 
     current_cache = caches[L-1]
-    grads["dA" + str(L-1)], grads["dW" + str(L)], grads["db" + str(L)] = linear_activation_backward(dAL, current_cache, activation = "lin")
+    grads["dA" + str(L-1)], grads["dW" + str(L)], grads["db" + str(L)] = linear_activation_backward(dAL, current_cache, activation = output_act)
     
     for l in reversed(range(L-1)):
         current_cache = caches[l]

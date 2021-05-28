@@ -52,7 +52,7 @@ plotsave    = 0         # save animation (0 = no, 1 = yes), takes long time
 state       = np.array([1.9, 0.1, 1, 0.2, 0.3, 0.4])   # format: [x, xdot, y, ydot, z, zdot]
 inputs      = 0*np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
 #target     = np.array([0.0,0.0,1.0])                 # format: [xr, yr, zr]
-target      = 10*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
+target      = 5*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
 outputs     = np.array([state[0],state[2],state[4]])   # format: [x, y, z]
 error       = outputs - target
 trial_cost  = LA.norm(error)
@@ -64,8 +64,10 @@ nSteps      = int(Tf/Ts+1)
 # constaints
 # ----------
 
-#umax = 10
-#vmax = 5
+xmax = 10       # these would be like, walls/floors (safety)
+vmax = 5        # max velocity
+umax = vmax/Ts  # max acceleration 
+
 
    
 # storage
@@ -91,7 +93,7 @@ explore_rates_all   = np.zeros([nSteps, 1])            # to store explore rates
 nParams         = 2    # number of parameters to tune
 nOptions        = 15   # number of options to selection from (ranges between 0 and nOptions)
 scale           = 1    # scale the value of the options (i.e. scale*[0:nOptions])
-Tl              = 3    # length of trial [s]
+Tl              = 5    # length of trial [s]
 trial_counter   = Ts   # initialize counter (in-trial)
 trial_cost      = 0    # initialze cost 
 trial_counts    = 0    # total number of trials
@@ -105,9 +107,9 @@ kp = scale*kp_i                             # actual value used
 kd_i = QL.select(Q,1,nOptions,explore_rate)
 kd = scale*kd_i
 explore_rates_all[0,:]  = explore_rate
-target_rand0 = 5*random.uniform(-1, 1)      # used for pseudo-random path gen
-target_rand1 = 5*random.uniform(-1, 1)
-target_rand2 = 5*random.uniform(-1, 1)
+target_rand0 = 2*random.uniform(-1, 1)      # used for pseudo-random path gen
+target_rand1 = 2*random.uniform(-1, 1)
+target_rand2 = 2*random.uniform(-1, 1)
 
 # Deep Neural Network stuff
 # -------------------------
@@ -167,11 +169,13 @@ def dynamics(state, t, inputs):
     state_dot[4] = state[5]     # zdot
     state_dot[5] = inputs[2]    # zddot (acceleration)
     
-    #apply constraints
-    #state_dot[0]=np.maximum(np.minimum(state_dot[1],vmax),-vmax)
-    #state_dot[2]=np.maximum(np.minimum(state_dot[3],vmax),-vmax)
-    #state_dot[4]=np.maximum(np.minimum(state_dot[5],vmax),-vmax)
-    
+    #apply constraints (velo/acc)
+    #state_dot[0]=np.maximum(np.minimum(state_dot[0],vmax),-vmax)
+    #state_dot[2]=np.maximum(np.minimum(state_dot[2],vmax),-vmax)
+    #state_dot[4]=np.maximum(np.minimum(state_dot[4],vmax),-vmax)
+    #state_dot[1]=np.maximum(np.minimum(state_dot[1],umax),-umax)
+    #state_dot[3]=np.maximum(np.minimum(state_dot[3],umax),-umax)
+    #state_dot[5]=np.maximum(np.minimum(state_dot[5],umax),-umax)
     
     return state_dot
 
@@ -221,7 +225,10 @@ while round(t,3) < Tf:
         if DNN_run_count == 0:
             #define the scaling (wag, based on max/min of values)
             scale_ins_n = np.amax(abs(train_x),axis = 1)
-            scale_outs_n = np.amax(abs(train_y),axis = 1)
+            #scale_outs_n = np.amax(abs(train_y),axis = 1)
+            
+            scale_outs_n=np.array([xmax,vmax,xmax,vmax,xmax,vmax])
+            
             #scale_outs_n = np.array([1,1,1,1,1,1])
             #scale_ins_n = np.array([1,1,1,1,1,1,1,1,1])
             ghosts_all[0,:] = states_all[0,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
@@ -320,7 +327,24 @@ while round(t,3) < Tf:
 
 
     # evolve the states through the dynamics
-    state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]                      
+    state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]  
+
+
+    #apply constraints (pos)
+    state[0]=np.maximum(np.minimum(state[0],xmax),-xmax)
+    state[2]=np.maximum(np.minimum(state[2],xmax),-xmax)
+    state[4]=np.maximum(np.minimum(state[4],xmax),-xmax)
+    state[1]=np.maximum(np.minimum(state[1],vmax),-vmax)
+    state[3]=np.maximum(np.minimum(state[3],vmax),-vmax)
+    state[5]=np.maximum(np.minimum(state[5],vmax),-vmax)
+    
+
+    #state[0]=np.maximum(np.minimum(state[0],xmax),-xmax)
+    #state[2]=np.maximum(np.minimum(state[2],xmax),-xmax)
+    #state[4]=np.maximum(np.minimum(state[4],xmax),-xmax)
+
+    
+                    
 
     # increment 
     t += Ts
@@ -384,9 +408,9 @@ while round(t,3) < Tf:
     inputs = - kp*(error) + kd*(derror)
     
     #apply constraints
-    #inputs[0]=np.maximum(np.minimum(inputs[0],umax),-umax)
-    #inputs[1]=np.maximum(np.minimum(inputs[1],umax),-umax)
-    #inputs[2]=np.maximum(np.minimum(inputs[2],umax),-umax)
+    inputs[0]=np.maximum(np.minimum(inputs[0],umax),-umax)
+    inputs[1]=np.maximum(np.minimum(inputs[1],umax),-umax)
+    inputs[2]=np.maximum(np.minimum(inputs[2],umax),-umax)
     
    
     
@@ -608,8 +632,8 @@ fig2, ax2 = plt.subplots()
 #ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
 #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
 begin = 40001
-ending = begin+90
-var = 0
+ending = begin+50
+var = 1
 
 
 ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
