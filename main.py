@@ -29,6 +29,7 @@ writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
 import qLearnLib as QL
 from numpy import linalg as LA
 import random
+#import mpl_toolkits.axes_grid1, mpl_toolkits.axisartist
 from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
 import pickle
 import dnnModule as dnn
@@ -64,7 +65,7 @@ nSteps      = int(Tf/Ts+1)
 # ----------
 
 #umax = 10
-#vmax = 100
+#vmax = 5
 
    
 # storage
@@ -114,6 +115,8 @@ target_rand2 = 5*random.uniform(-1, 1)
 mini_batch_size     = int(1000/Ts)       # divide by Ts to define in seconds
 mini_batch_counts   = -1 #int(-1000/Ts)
 DNN_run_count       = 0
+DNN_mode            = 'state'            # model based on state (good) or dstate (not good, for broad state spaces)
+
 
 # import the initial parameters for the DNN
 file_initial_parameters = open("initial_params.pkl","rb")
@@ -132,15 +135,15 @@ DNN_parameters = 'random'
 #scale_ins_n = np.array([24.7144, 309.206, 31.1158, 256.741, 27.9044, 250.66, 3137.21, 2679.5, 2522.73])
 
 # scaling - none
-scale_outs_n = np.array([1,1,1,1,1,1])
-scale_ins_n = np.array([1,1,1,1,1,1,1,1,1])
+#scale_outs_n = np.array([1,1,1,1,1,1])
+#scale_ins_n = np.array([1,1,1,1,1,1,1,1,1])
 
 # scaling - auto
 #scale_ins_n = np.amax(abs(train_x),axis = 1)
 #scale_outs_n = np.amax(abs(train_y),axis = 1)
 
-train_x = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
-train_y = states_all[1::,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+#train_x = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
+#train_y = states_all[1::,:].transpose()/np.reshape(scale_outs_n, (-1,1))
 
 #train_x = np.hstack((states_all[0:-1,:],inputs_all[0:-1,:])).transpose()
 #train_y = states_all[1::,:].transpose()
@@ -165,9 +168,9 @@ def dynamics(state, t, inputs):
     state_dot[5] = inputs[2]    # zddot (acceleration)
     
     #apply constraints
-    #state_dot[1]=np.maximum(np.minimum(state_dot[1],vmax),-vmax)
-    #state_dot[3]=np.maximum(np.minimum(state_dot[3],vmax),-vmax)
-    #state_dot[5]=np.maximum(np.minimum(state_dot[5],vmax),-vmax)
+    #state_dot[0]=np.maximum(np.minimum(state_dot[1],vmax),-vmax)
+    #state_dot[2]=np.maximum(np.minimum(state_dot[3],vmax),-vmax)
+    #state_dot[4]=np.maximum(np.minimum(state_dot[5],vmax),-vmax)
     
     
     return state_dot
@@ -200,23 +203,29 @@ while round(t,3) < Tf:
         # ranges
         batch_start  =   i-mini_batch_size-1
         batch_end    =   i-1
-        
-        # Travis: try modelling deltas, rather than actuals
-        #           this may pseudo-normalize things
-        
-        
+                
         # build the training set
         #train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
         #train_y = states_all[batch_start+1:batch_end+1,:].transpose()/np.reshape(scale_outs_n, (-1,1))
-        train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()
-        train_y = states_all[batch_start+1:batch_end+1,:].transpose()
+        
+        # depending on mode
+        if DNN_mode == 'state':
+            # model by state
+            train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()
+            train_y = states_all[batch_start+1:batch_end+1,:].transpose()
+        if DNN_mode == 'dstate':
+            train_x = np.hstack((states_all[batch_start:batch_end,:]-states_all[batch_start-1:batch_end-1,:],inputs_all[batch_start:batch_end,:])).transpose()
+            train_y = states_all[batch_start+1:batch_end+1,:].transpose() - states_all[batch_start:batch_end,:].transpose()
         
         # if this is the first run
         if DNN_run_count == 0:
             #define the scaling (wag, based on max/min of values)
             scale_ins_n = np.amax(abs(train_x),axis = 1)
             scale_outs_n = np.amax(abs(train_y),axis = 1)
+            #scale_outs_n = np.array([1,1,1,1,1,1])
+            #scale_ins_n = np.array([1,1,1,1,1,1,1,1,1])
             ghosts_all[0,:] = states_all[0,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+            
         DNN_run_count += 1
         
         # now scale them
@@ -225,8 +234,7 @@ while round(t,3) < Tf:
         
         # scale all ghosts
         #ghosts_all[:,:] = ghosts_all[:,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
-        
-        
+            
         # define hyper-parameters
         n_x = train_x.shape[0]              # number of input features
         n_y = train_y.shape[0]              # number of outputs
@@ -271,17 +279,28 @@ while round(t,3) < Tf:
             #test_x_k = np.hstack((ghosts_all[k:k+1,:],inputs_all[k:k+1,:])).transpose()/np.reshape(scale_ins_n, (-1,1))
             
             # replace the sample in the test set with a ghost
-            #est_x[0:n_y,k] = ghosts_all[k,:].transpose() 
-            test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() 
+            #est_x[0:n_y,k] = ghosts_all[k,:].transpose()
             
-            # - ignore
-            #test_y_k = states_all[k+1:k+2,:].transpose()/np.reshape(scale_outs_n, (-1,1))
-            #ghosts_all[k+1:k+2,:] = dnn.predict(test_x_k, test_y_k, DNN_parameters).transpose()
-            
-            # make a prediction and update next ghost
-            #ghosts_all[k+1:k+2,:] = dnn.predict(test_x[:,k], test_y[:,k], DNN_parameters).transpose()
-            #ghosts_all[k+1:k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
-            ghosts_all[batch_start+k+1:batch_start+k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+            if DNN_mode == 'state':
+                test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() 
+                # - ignore
+                #test_y_k = states_all[k+1:k+2,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+                #ghosts_all[k+1:k+2,:] = dnn.predict(test_x_k, test_y_k, DNN_parameters).transpose()
+                # make a prediction and update next ghost
+                #ghosts_all[k+1:k+2,:] = dnn.predict(test_x[:,k], test_y[:,k], DNN_parameters).transpose()
+                #ghosts_all[k+1:k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+                ghosts_all[batch_start+k+1:batch_start+k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+
+            if DNN_mode == 'dstate':
+                test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() - ghosts_all[batch_start+k-1,:].transpose() 
+                # - ignore
+                #test_y_k = states_all[k+1:k+2,:].transpose()/np.reshape(scale_outs_n, (-1,1))
+                #ghosts_all[k+1:k+2,:] = dnn.predict(test_x_k, test_y_k, DNN_parameters).transpose()
+                # make a prediction and update next ghost
+                #ghosts_all[k+1:k+2,:] = dnn.predict(test_x[:,k], test_y[:,k], DNN_parameters).transpose()
+                #ghosts_all[k+1:k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+                change = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+                ghosts_all[batch_start+k+1:batch_start+k+2,:] = ghosts_all[batch_start+k:batch_start+k+1,:] + change
 
             #move the sim counter forward
             sim_trial_counter += Ts
@@ -589,8 +608,9 @@ fig2, ax2 = plt.subplots()
 #ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
 #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
 begin = 40001
-ending = begin+300
+ending = begin+90
 var = 0
+
 
 ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
 #ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r',t_all[begin:ending],inputs_all[begin:ending,0], '--m')
