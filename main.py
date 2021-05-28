@@ -40,11 +40,13 @@ import dnnModule as dnn
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 4001      # final time 
+Tf          = 3001      # final time 
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
 plotsave    = 0         # save animation (0 = no, 1 = yes), takes long time
+tSpread     = 1         # how far to spread the targets
+
 
 # initialize
 # ----------
@@ -52,7 +54,7 @@ plotsave    = 0         # save animation (0 = no, 1 = yes), takes long time
 state       = np.array([1.9, 0.1, 1, 0.2, 0.3, 0.4])   # format: [x, xdot, y, ydot, z, zdot]
 inputs      = 0*np.array([0.21, 0.15, 0.1])              # format: [xddot, yddot, zddot]
 #target     = np.array([0.0,0.0,1.0])                 # format: [xr, yr, zr]
-target      = 5*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
+target      = tSpread*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
 outputs     = np.array([state[0],state[2],state[4]])   # format: [x, y, z]
 error       = outputs - target
 trial_cost  = LA.norm(error)
@@ -64,7 +66,7 @@ nSteps      = int(Tf/Ts+1)
 # constaints (on the agent)
 # ----------
 
-xmax = 10       # max +/- position
+xmax = 2       # max +/- position
 vmax = 5        # max +/- velocity
 umax = vmax/Ts  # max +/- acceleration 
    
@@ -84,14 +86,14 @@ targets_all[0,:]    = target
 # ----------------
 
 nParams         = 2    # number of parameters to tune
-nOptions        = 15   # number of options to selection from (ranges between 0 and nOptions)
+nOptions        = 10   # number of options to selection from (ranges between 0 and nOptions)
 scale           = 1    # scale the value of the options (i.e. scale*[0:nOptions])
-Tl              = 5    # length of trial [s]
+Tl              = 2    # length of trial [s]
 trial_counter   = Ts   # initialize counter (in-trial)
 trial_cost      = 0    # initialze cost 
 trial_counts    = 0    # total number of trials
 explore_rate    = 1    # how often to explore, 0 to 1 (start high, decrease)
-epsilon         = 0.997                     # explore rate of change (->0 faster)
+epsilon         = 0.998                     # explore rate of change (->0 faster)
 Q               = QL.init(nParams,nOptions) # this is the Q-table 
 
 #stores 
@@ -107,9 +109,9 @@ kp_i = QL.select(Q,0,nOptions,explore_rate) # index for first parameter
 kp = scale*kp_i                             # actual value used
 kd_i = QL.select(Q,1,nOptions,explore_rate) # index for second parameter
 kd = scale*kd_i                             # actual value used
-target_rand0 = 2*random.uniform(-1, 1)      # used for pseudo-random path gen
-target_rand1 = 2*random.uniform(-1, 1)      #   "
-target_rand2 = 2*random.uniform(-1, 1)      #   "
+target_rand0 = tSpread *random.uniform(-1, 1)      # used for pseudo-random path gen
+target_rand1 = tSpread *random.uniform(-1, 1)      #   "
+target_rand2 = tSpread *random.uniform(-1, 1)      #   "
 
 # Deep Neural Network stuff
 # -------------------------
@@ -119,7 +121,7 @@ mini_batch_size     = int(1000/Ts)       # divide by Ts to define in seconds
 mini_batch_counts   = -1                 # offset by negative -1 so I can reach back legacy: int(-1000/Ts)
 DNN_run_count       = 0                  # counts the number of DNN runs   
 DNN_mode            = 'state'            # model based on state (good) or dstate (redundant, consider getting rid of this)
-learning_rate       = 0.1                # learning rate (< 1.0)
+learning_rate       = 0.2                # learning rate (< 1.0)
 num_iterations      = 2000               # number of iterations
 fcost = 'mse'                            # x-entropy (classification) or mse (regression)
 DNN_RT_test = 1                          # run a DNN Real-time test (0=no, 1=yes)
@@ -384,16 +386,16 @@ while round(t,3) < Tf:
             print('trial ', trial_counts, 'done @:', round(t,2), 's' )
         
         # select new target (randomly)
-        target = 10*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
-        target_rand0 = 5*random.uniform(-1, 1)
-        target_rand1 = 5*random.uniform(-1, 1)
-        target_rand2 = 5*random.uniform(-1, 1)
+        target = tSpread*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)]) 
+        target_rand0 = tSpread *random.uniform(-1, 1)
+        target_rand1 = tSpread *random.uniform(-1, 1)
+        target_rand2 = tSpread *random.uniform(-1, 1)
         
         # reduce the explore rate (floors at 0.001)
-        explore_rate = np.maximum(epsilon**t,0.001)-0.001
+        explore_rate = np.maximum(epsilon**t,0.01)-0.01
         
     # wander the target (according this this trial's random parameters)
-    target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
+    #target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
 
     # controller (PD type)
     outputs = np.array([state[0],state[2], state[4]]) 
@@ -444,14 +446,14 @@ fig = plt.figure()
 ax = p3.Axes3D(fig)
 
 ax.grid()
-axis = 10
+axis = 2
 ax.set_xlim3d([-axis, axis])
 ax.set_ylim3d([-axis, axis])
 ax.set_zlim3d([-axis, axis])
 
 line, = ax.plot([], [],[], 'bo-',ms=10, lw=2)
 line_target, = ax.plot([], [],[], 'ro-', ms=5, lw=2)
-line_ghost, = ax.plot([], [],[], 'mo-',ms=10, lw=2)
+line_ghost, = ax.plot([], [],[], 'co-',ms=10, lw=2)
 
 time_template = 'Time = %.1f/%.0fs'
 time_text = ax.text2D(0.05, 0.95, '', transform=ax.transAxes)
@@ -507,7 +509,7 @@ def update(i):
     return line, time_text
 
 #fast
-ani = animation.FuncAnimation(fig, update, np.arange(30001, len(states_all)),interval=15, blit=False)
+ani = animation.FuncAnimation(fig, update, np.arange(20000, len(states_all)),interval=15, blit=False)
 
 #slow (for saving)
 if plotsave == 1:
@@ -532,7 +534,7 @@ ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2
 ax2.set_xlabel('Time [s]')
 ax2.set_ylabel('Cost [m]')
 ax2.set_xlim(0,max(t_all))
-ax2.set_ylim(0,max(costs_all))
+ax2.set_ylim(0,max(costs_all[int(Tl/Ts+1)::,:]))
 
 # create inset axis
 ax3 = plt.axes([0,0,1,1])
@@ -563,7 +565,7 @@ ax2.set_xlabel('Time [s]')
 ax2.set_ylabel('Cost [m]')
 #ax2.legend(loc=0)
 ax2.set_xlim(0,max(t_all))
-ax2.set_ylim(0,max(costs_all))
+ax2.set_ylim(0,max(costs_all[int(Tl/Ts+1)::,:]))
 
 #best fit line
 cost_fit = np.polyfit(t_all[starts::segments], costs_all[starts::segments,0], polyfit_n)
@@ -591,7 +593,7 @@ ax3.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
 ax3.set_xlabel('Time [s]')
 ax3.set_ylabel('Rewards')
 ax3.set_xlim(0,max(t_all))
-ax3.set_ylim(0,max(rewards_all))
+ax3.set_ylim(0,max(rewards_all[int(Tl/Ts+1)::,:]))
 
 plt.savefig('rewards.png')
 
@@ -614,7 +616,7 @@ ax2.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
 ax2.set_xlabel('Time [s]')
 ax2.set_ylabel('Rewards')
 ax2.set_xlim(0,max(t_all))
-ax2.set_ylim(0,max(rewards_all))
+ax2.set_ylim(0,max(rewards_all[int(Tl/Ts+1)::,:]))
 
 plt.savefig('rewards2.png')
 
@@ -630,7 +632,7 @@ fig2, ax2 = plt.subplots()
 #ax2.plot(states_all[8501:9000,0],states_all[8501:9000,2],'--k',ghosts_all[8501:9000,0],ghosts_all[8501:9000,2],'--r')
 #ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
 #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
-begin = 30001
+begin = 20001
 ending = begin+1000
 var = 0
 
