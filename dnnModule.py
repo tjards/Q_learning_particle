@@ -35,9 +35,9 @@ import matplotlib.pyplot as plt
 # ----------
 
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
-print_progress  = 2      # 1 = yes, 0 = no, 2 = yes but no plots
+print_progress  = 1      # 1 = yes, 0 = no, 2 = yes but no plots
 print_rate      = 100    # rate at which to print results (default 100)
-output_act      = 'tanh'
+output_act      = 'lin'
 
 
 #%% Main training function 
