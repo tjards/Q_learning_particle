@@ -83,7 +83,7 @@ def train(X, Y, architecture, learning_rate, num_iterations, print_cost=True, fc
         plt.rcParams['figure.figsize'] = (5.0, 4.0) # set default size of plots
         plt.figure()
         plt.plot(np.squeeze(costs))
-        plt.ylabel('cost')
+        plt.ylabel('Cost [RMSE]')
         plt.xlabel('Iterations/100')
         plt.title("Learning rate =" + str(learning_rate))
      

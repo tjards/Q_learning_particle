@@ -122,7 +122,7 @@ mini_batch_counts   = -1                 # offset by negative -1 so I can reach 
 DNN_run_count       = 0                  # counts the number of DNN runs   
 DNN_mode            = 'state'            # model based on state (good) or dstate (redundant, consider getting rid of this)
 learning_rate       = 0.2                # learning rate (< 1.0), default = 0.2
-num_iterations      = 2000               # number of iterations, default = 2000
+num_iterations      = 3000               # number of iterations, default = 2000
 fcost = 'mse'                            # x-entropy (classification) or mse (regression)
 DNN_RT_test = 1                          # run a DNN Real-time test (0=no, 1=yes)
 # note: architecture is defined in the loop, as it draws from training set sizes
@@ -481,7 +481,7 @@ ani = animation.FuncAnimation(fig, update, np.arange(20000, len(states_all)),int
 
 #slow (for saving)
 if plotsave == 1:
-    ani2 = animation.FuncAnimation(fig, update, np.linspace(1, len(states_all)-1, num=500, dtype=int),interval=15, blit=False)
+    ani2 = animation.FuncAnimation(fig, update, np.linspace(20000, len(states_all)-1, num=500, dtype=int),interval=15, blit=False)
     if verbose == 1:
         ani2.save('animation.gif', writer=writer, progress_callback = lambda i, n: print(f'Saving frame {i} of {n}'))
     else:
@@ -609,6 +609,8 @@ ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:endi
 #ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r',t_all[begin:ending],inputs_all[begin:ending,0], '--m')
 fig2.legend(['states', 'ghosts', 'inputs'])
 #ax2.plot(states_all[10000:2*10000,0],states_all[10000:2*10000,2],'--k',ghosts_all[10000:2*10000,0],ghosts_all[10000:2*10000,2],'--r')
+ax2.set_xlabel('Time [s]')
+ax2.set_ylabel('x-position [s]')
 
 
 
