@@ -40,7 +40,7 @@ import dnnModule as dnn
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 3001      # final time 
+Tf          = 3001      # final time (default 3001)
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
@@ -66,9 +66,9 @@ nSteps      = int(Tf/Ts+1)
 # constaints (on the agent)
 # ----------
 
-xmax = 3       # max +/- position
+xmax = 3        # max +/- position
 vmax = 5        # max +/- velocity
-umax = vmax/Ts  # max +/- acceleration 
+umax = vmax/Ts  # max +/- acceleration (default = vmax/Ts)
    
 # Agent stuff
 # -----------
@@ -93,7 +93,7 @@ trial_counter   = Ts   # initialize counter (in-trial)
 trial_cost      = 0    # initialze cost 
 trial_counts    = 0    # total number of trials
 explore_rate    = 1    # how often to explore, 0 to 1 (start high, decrease)
-epsilon         = 0.998                     # explore rate of change (->0 faster)
+epsilon         = 0.998                     # explore rate of change (->0 faster), default = 0.998 for Tf = 3001
 Q               = QL.init(nParams,nOptions) # this is the Q-table 
 
 #stores 
@@ -121,8 +121,8 @@ mini_batch_size     = int(1000/Ts)       # divide by Ts to define in seconds
 mini_batch_counts   = -1                 # offset by negative -1 so I can reach back legacy: int(-1000/Ts)
 DNN_run_count       = 0                  # counts the number of DNN runs   
 DNN_mode            = 'state'            # model based on state (good) or dstate (redundant, consider getting rid of this)
-learning_rate       = 0.2                # learning rate (< 1.0)
-num_iterations      = 2000               # number of iterations
+learning_rate       = 0.2                # learning rate (< 1.0), default = 0.2
+num_iterations      = 2000               # number of iterations, default = 2000
 fcost = 'mse'                            # x-entropy (classification) or mse (regression)
 DNN_RT_test = 1                          # run a DNN Real-time test (0=no, 1=yes)
 # note: architecture is defined in the loop, as it draws from training set sizes
