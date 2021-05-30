@@ -350,6 +350,12 @@ def update(parameters, grads, learning_rate):
         
     return parameters
 
+#%% Build a minibatch
+
+
+
+
+
 #%% Predictions
 # -------------
 
