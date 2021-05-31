@@ -333,8 +333,9 @@ while round(t,3) < Tf:
         
         while iDyna < nDyna:
               
-            i_dyna      = 0         # initialize time
-            state_dyna  = state     # adopt the current real state as starting point 
+            i_dyna      = 0                             # initialize time
+            state_dyna  = state                         # adopt the current real state as starting point
+            inputs_dyna = 0*np.array([0.0, 0.0, 0.0])   # initialize inputs 
             
             # Travis: start here
             print('insert dyna Q run ', iDyna, ' of ', nDyna)
