@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 # ----------
 
 nonlin          = "tanh" # which nonlinear activation function to use (sigmoid, relu, or tanh)
-print_progress  = 1      # 1 = yes, 0 = no, 2 = yes but no plots
+print_progress  = 0      # 1 = yes, 0 = no, 2 = yes but no plots
 print_rate      = 100    # rate at which to print results (default 100)
 output_act      = 'lin'
 
@@ -350,10 +350,23 @@ def update(parameters, grads, learning_rate):
         
     return parameters
 
-#%% Build a minibatch
+#%% minibatch
 
-
-
+def build_batch(states_all, inputs_all, batch_start, batch_end, DNN_mode):
+    
+    # if modelling by state (default)
+    if DNN_mode == 'state':
+        # build training set
+        train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()
+        train_y = states_all[batch_start+1:batch_end+1,:].transpose()
+    
+    # if modelling by change in state (legacy)
+    elif DNN_mode == 'dstate':
+        # build training set
+        train_x = np.hstack((states_all[batch_start:batch_end,:]-states_all[batch_start-1:batch_end-1,:],inputs_all[batch_start:batch_end,:])).transpose()
+        train_y = states_all[batch_start+1:batch_end+1,:].transpose() - states_all[batch_start:batch_end,:].transpose()
+        
+    return train_x, train_y
 
 
 #%% Predictions
@@ -383,4 +396,59 @@ def predict(X, y, parameters):
     #print("Avg Error ", (1/m)*np.sum(np.power(probas.flatten()-y.flatten(),2)))
         
     return probas
+
+#%% Run a mini-sim
+
+def mini_sim(DNN_parameters, mini_batch_size, train_x, train_y, ghosts_all, states_all, batch_start, batch_end, scale_outs_n, n_y, Ts, Tl, i, DNN_mode):
+    
+      # Run a mini simulation using these parameters
+    # --------------------------------------------
+    
+    print('Running internal test of DNN at i= ',i)
+    
+    # initialize test-set with actual states (will be replaced with predictions)
+    test_x = train_x # already normalized
+    test_y = train_y # already normalized
+          
+    # load the initial condition for the ghosts (actual state)
+    ghosts_all[batch_start:batch_start+1,:] = states_all[batch_start:batch_start+1,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+    
+    # start a simulated trial counter
+    sim_trial_counter = Ts   # initialize counter (in-trial)
+    
+    # for each sample in the batch     
+    #for k in range(batch_start,batch_end):
+    for k in range(0,mini_batch_size-1):
+        
+        # if a trial resets
+        if round(sim_trial_counter,5) > Tl:
+            # feed it a new position estimate
+            ghosts_all[batch_start+k,:] = states_all[batch_start+k,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+            # reset the counter
+            sim_trial_counter = 0
+    
+        if DNN_mode == 'state':
+            test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() 
+            ghosts_all[batch_start+k+1:batch_start+k+2,:] = predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+    
+        if DNN_mode == 'dstate':
+            test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() - ghosts_all[batch_start+k-1,:].transpose() 
+     
+            change = predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+            ghosts_all[batch_start+k+1:batch_start+k+2,:] = ghosts_all[batch_start+k:batch_start+k+1,:] + change
+    
+        #move the sim counter forward
+        sim_trial_counter += Ts
+      
+    # reset batch count
+    #mini_batch_counts = 0
+    
+    print('... internal test of DNN done, ghosts produced')
+    batch_error = np.mean(np.sqrt((ghosts_all[batch_start:batch_end,:] - states_all[batch_start:batch_end,:])**2))
+    print('Batch RMSE = ', batch_error)
+    
+    return batch_error, ghosts_all
+
+
+
 

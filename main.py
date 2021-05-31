@@ -113,6 +113,10 @@ target_rand0 = tSpread *random.uniform(-1, 1)      # used for pseudo-random path
 target_rand1 = tSpread *random.uniform(-1, 1)      #   "
 target_rand2 = tSpread *random.uniform(-1, 1)      #   "
 
+nDyna = 10          # number of Dyna-Q "planning" sessions
+iDyna = 0           # initialize Dyna count
+
+
 # Deep Neural Network stuff
 # -------------------------
 
@@ -122,9 +126,9 @@ mini_batch_counts   = -1                 # offset by negative -1 so I can reach 
 DNN_run_count       = 0                  # counts the number of DNN runs   
 DNN_mode            = 'state'            # model based on state (good) or dstate (redundant, consider getting rid of this)
 learning_rate       = 0.2                # learning rate (< 1.0), default = 0.2
-num_iterations      = 3000               # number of iterations, default = 2000
+num_iterations      = 2000               # number of iterations, default = 2000
 fcost = 'mse'                            # x-entropy (classification) or mse (regression)
-DNN_RT_test = 1                          # run a DNN Real-time test (0=no, 1=yes)
+DNN_RT_test = 0                          # run a DNN Real-time test (0=no, 1=yes)
 # note: architecture is defined in the loop, as it draws from training set sizes
 
 # import the initial parameters for the DNN (not default)
@@ -180,8 +184,9 @@ while round(t,3) < Tf:
     costs_all[i,:]          = trial_cost 
     explore_rates_all[i,:]  = explore_rate 
 
-    # model the system with a DNN (by minibatches)
-    # ---------------------------
+    # =======================================================================
+    # Model the system with a DNN (by minibatches) 
+    # =======================================================================
     
     # if we've accumulated enough data for a new minibatch
     if mini_batch_counts == mini_batch_size:
@@ -191,26 +196,15 @@ while round(t,3) < Tf:
         # define ranges
         batch_start  =   i-mini_batch_size-1
         batch_end    =   i-1
-                
-        # if modelling by state (default)
-        if DNN_mode == 'state':
-            # build training set
-            train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()
-            train_y = states_all[batch_start+1:batch_end+1,:].transpose()
-        
-        # if modelling by change in state (legacy)
-        elif DNN_mode == 'dstate':
-            # build training set
-            train_x = np.hstack((states_all[batch_start:batch_end,:]-states_all[batch_start-1:batch_end-1,:],inputs_all[batch_start:batch_end,:])).transpose()
-            train_y = states_all[batch_start+1:batch_end+1,:].transpose() - states_all[batch_start:batch_end,:].transpose()
-        
+             
+        # build batch
+        train_x, train_y = dnn.build_batch(states_all, inputs_all, batch_start, batch_end, DNN_mode)
+          
         # if this is the first run
         if DNN_run_count == 0:
             
             # define the scaling (based on constraints)
             scale_outs_n=np.array([xmax,vmax,xmax,vmax,xmax,vmax])
-            #scale_outs_n = np.array([1,1,1,1,1,1])
-            #scale_outs_n = np.amax(abs(train_y),axis = 1) # alternate approach (legacy)
             scale_ins_n = np.amax(abs(train_x),axis = 1)
 
             # double-check the constraints make sense
@@ -230,7 +224,6 @@ while round(t,3) < Tf:
         train_x = train_x/np.reshape(scale_ins_n, (-1,1))
         train_y = train_y/np.reshape(scale_outs_n, (-1,1))
         
-
         # define DNN hyper-parameters
         n_x = train_x.shape[0]              # number of input features
         n_y = train_y.shape[0]              # number of outputs
@@ -246,54 +239,17 @@ while round(t,3) < Tf:
         # if I want to run a real time test of the parameters
         if DNN_RT_test == 1:
         
-            # Run a mini simulation using these parameters
-            # --------------------------------------------
-            
-            print('Running internal test of DNN at i= ',i)
-            
-            # initialize test-set with actual states (will be replaced with predictions)
-            test_x = train_x # already normalized
-            test_y = train_y # already normalized
-                  
-            # load the initial condition for the ghosts (actual state)
-            ghosts_all[batch_start:batch_start+1,:] = states_all[batch_start:batch_start+1,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
-            
-            # start a simulated trial counter
-            sim_trial_counter = Ts   # initialize counter (in-trial)
-    
-            # for each sample in the batch     
-            #for k in range(batch_start,batch_end):
-            for k in range(0,mini_batch_size-1):
-                
-                # if a trial resets
-                if round(sim_trial_counter,5) > Tl:
-                    # feed it a new position estimate
-                    ghosts_all[batch_start+k,:] = states_all[batch_start+k,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
-                    # reset the counter
-                    sim_trial_counter = 0
-    
-                if DNN_mode == 'state':
-                    test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() 
-                    ghosts_all[batch_start+k+1:batch_start+k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
-    
-                if DNN_mode == 'dstate':
-                    test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() - ghosts_all[batch_start+k-1,:].transpose() 
- 
-                    change = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
-                    ghosts_all[batch_start+k+1:batch_start+k+2,:] = ghosts_all[batch_start+k:batch_start+k+1,:] + change
-    
-                #move the sim counter forward
-                sim_trial_counter += Ts
-          
-            # reset batch count
-            mini_batch_counts = 0
-            
-            print('... internal test of DNN done, ghosts produced')
-            batch_error = np.mean(np.sqrt((ghosts_all[batch_start:batch_end,:] - states_all[batch_start:batch_end,:])**2))
-            print('Batch RMSE = ', batch_error)
-            
+            # run sim
+            batch_error, ghosts_all = dnn.mini_sim(DNN_parameters, mini_batch_size, train_x, train_y, ghosts_all, states_all, batch_start, batch_end, scale_outs_n, n_y, Ts, Tl, i, DNN_mode)    
+        
+        # reset mini batch count 
+        mini_batch_counts = 0
+                    
     mini_batch_counts += 1
 
+    # =======================================================================
+    # Agent Dynamics
+    # =======================================================================
 
     # evolve the states through the dynamics
     state = integrate.odeint(dynamics, state, np.arange(t, t+Ts, Tz), args = (inputs,))[-1,:]  
@@ -314,6 +270,11 @@ while round(t,3) < Tf:
     t += Ts
     i += 1
 
+
+    # =======================================================================
+    # Implement Q-Learning to tune parameters
+    # =======================================================================
+
     # accumulate cost over thie trial
     # -------------------------------
     
@@ -321,8 +282,7 @@ while round(t,3) < Tf:
     
         # accumulate the cost (position + velocity component)
         trial_cost += LA.norm(target-state[0:6:2])/Tl - ((LA.norm(target-state[0:6:2])-LA.norm(error)))/Tl
-
-        
+ 
         # increment the counter 
         trial_counter += Ts
         
@@ -350,6 +310,8 @@ while round(t,3) < Tf:
         trial_counter = Ts      # in-trial counter
         trial_cost = 0
         trial_counts += 1       # total number of trials
+        
+        
         if verbose == 1:
             print('trial ', trial_counts, 'done @:', round(t,2), 's' )
         
@@ -361,7 +323,33 @@ while round(t,3) < Tf:
         
         # reduce the explore rate (floors at 0.001)
         explore_rate = np.maximum(epsilon**t,0.01)-0.01
+      
+     
+        print('Q Learn trial done at t=', round(t,1)) 
         
+        # ===================================================================
+        # Run a few Dyna-Q trials
+        # ===================================================================
+        
+        while iDyna < nDyna:
+              
+            i_dyna      = 0         # initialize time
+            state_dyna  = state     # adopt the current real state as starting point 
+            
+            # Travis: start here
+            print('insert dyna Q run ', iDyna, ' of ', nDyna)
+            
+            #increment the dyna counter
+            iDyna += 1
+     
+        # reset Dyna counter 
+        iDyna = 0
+        
+    
+    # =======================================================================
+    # Controller
+    # =======================================================================
+    
     # wander the target (according this this trial's random parameters)
     #target += 0.5*np.array([1*np.sin(i*Ts*target_rand0),1*np.cos(0.5*i*Ts*target_rand1),1*np.sin(i*Ts*target_rand2)])
 
@@ -683,3 +671,68 @@ ax2.set_ylabel('x-position [s]')
             #ghosts_all[batch_start:batch_end+1,:] = ghosts_all[batch_start:batch_end+1,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
             #ghosts_all[:,:] = ghosts_all[:,:]*np.reshape(scale_outs_n, (-1,1)).transpose()
             # do outside now
+            
+            
+            
+                    
+        # # if modelling by state (default)
+        # if DNN_mode == 'state':
+        #     # build training set
+        #     train_x = np.hstack((states_all[batch_start:batch_end,:],inputs_all[batch_start:batch_end,:])).transpose()
+        #     train_y = states_all[batch_start+1:batch_end+1,:].transpose()
+        
+        # # if modelling by change in state (legacy)
+        # elif DNN_mode == 'dstate':
+        #     # build training set
+        #     train_x = np.hstack((states_all[batch_start:batch_end,:]-states_all[batch_start-1:batch_end-1,:],inputs_all[batch_start:batch_end,:])).transpose()
+        #     train_y = states_all[batch_start+1:batch_end+1,:].transpose() - states_all[batch_start:batch_end,:].transpose()
+    
+    
+                #scale_outs_n = np.array([1,1,1,1,1,1])
+            #scale_outs_n = np.amax(abs(train_y),axis = 1) # alternate approach (legacy)
+
+            # # Run a mini simulation using these parameters
+            # # --------------------------------------------
+            
+            # print('Running internal test of DNN at i= ',i)
+            
+            # # initialize test-set with actual states (will be replaced with predictions)
+            # test_x = train_x # already normalized
+            # test_y = train_y # already normalized
+                  
+            # # load the initial condition for the ghosts (actual state)
+            # ghosts_all[batch_start:batch_start+1,:] = states_all[batch_start:batch_start+1,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+            
+            # # start a simulated trial counter
+            # sim_trial_counter = Ts   # initialize counter (in-trial)
+    
+            # # for each sample in the batch     
+            # #for k in range(batch_start,batch_end):
+            # for k in range(0,mini_batch_size-1):
+                
+            #     # if a trial resets
+            #     if round(sim_trial_counter,5) > Tl:
+            #         # feed it a new position estimate
+            #         ghosts_all[batch_start+k,:] = states_all[batch_start+k,:]/np.reshape(scale_outs_n, (-1,1)).transpose()
+            #         # reset the counter
+            #         sim_trial_counter = 0
+    
+            #     if DNN_mode == 'state':
+            #         test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() 
+            #         ghosts_all[batch_start+k+1:batch_start+k+2,:] = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+    
+            #     if DNN_mode == 'dstate':
+            #         test_x[0:n_y,k] = ghosts_all[batch_start+k,:].transpose() - ghosts_all[batch_start+k-1,:].transpose() 
+ 
+            #         change = dnn.predict(np.reshape(test_x[:,k],(-1,1)), np.reshape(test_y[:,k],(-1,1)), DNN_parameters).transpose()
+            #         ghosts_all[batch_start+k+1:batch_start+k+2,:] = ghosts_all[batch_start+k:batch_start+k+1,:] + change
+    
+            #     #move the sim counter forward
+            #     sim_trial_counter += Ts
+          
+            # # reset batch count
+            # mini_batch_counts = 0
+            
+            # print('... internal test of DNN done, ghosts produced')
+            # batch_error = np.mean(np.sqrt((ghosts_all[batch_start:batch_end,:] - states_all[batch_start:batch_end,:])**2))
+            # print('Batch RMSE = ', batch_error)

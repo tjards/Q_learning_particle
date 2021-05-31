@@ -12,6 +12,7 @@ Created on Sat May 15 20:40:36 2021
 
 import numpy as np
 import random
+from numpy import linalg as LA
 
 # Setup
 # ------
@@ -50,3 +51,16 @@ def update(Q,state,action,next_state,reward):
     next_action = np.argmax(Q[next_state,:])
     Q[state, action] += np.multiply(learn_rate, reward + discount*Q[next_state, next_action] - Q[state, action])
     return Q
+
+#%% Other tools
+
+def accumulator(trial_cost, state, target, error, Tl, Ts, trial_counter):
+    
+    # accumulate the cost (position + velocity component)
+    trial_cost += LA.norm(target-state[0:6:2])/Tl - ((LA.norm(target-state[0:6:2])-LA.norm(error)))/Tl
+ 
+    # increment the counter 
+    trial_counter += Ts
+        
+        #reward = 0    
+    return trial_cost, trial_counter
