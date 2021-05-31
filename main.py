@@ -331,11 +331,26 @@ while round(t,3) < Tf:
         # Run a few Dyna-Q trials
         # ===================================================================
         
+        # For the desired number of dyna trials
         while iDyna < nDyna:
-              
+            
+            # initialize
             i_dyna      = 0                             # initialize time
             state_dyna  = state                         # adopt the current real state as starting point
             inputs_dyna = 0*np.array([0.0, 0.0, 0.0])   # initialize inputs 
+            
+            # randomly select parameters
+            
+            # run through the DNN-model
+            
+                # accumulate error over Tl
+            
+            # compute reward
+            
+            # some kind of decision about learning rate linked to modelling error?
+                      
+            # update (the real) Q table
+            
             
             # Travis: start here
             print('insert dyna Q run ', iDyna, ' of ', nDyna)
