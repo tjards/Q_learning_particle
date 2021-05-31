@@ -46,7 +46,7 @@ Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
 plotsave    = 0         # save animation (0 = no, 1 = yes), takes long time
 tSpread     = 2         # how far to spread the targets
-
+random.seed(0)
 
 # initialize
 # ----------
@@ -324,44 +324,81 @@ while round(t,3) < Tf:
         # reduce the explore rate (floors at 0.001)
         explore_rate = np.maximum(epsilon**t,0.01)-0.01
       
-     
-        print('Q Learn trial done at t=', round(t,1)) 
+        #print('Q Learn trial done at t=', round(t,1)) 
         
         # ===================================================================
         # Run a few Dyna-Q trials
         # ===================================================================
         
-        # For the desired number of dyna trials
-        while iDyna < nDyna:
+        # If we have a model available
+        if DNN_run_count > 0:
             
-            # initialize
-            i_dyna      = 0                             # initialize time
-            state_dyna  = state                         # adopt the current real state as starting point
-            inputs_dyna = 0*np.array([0.0, 0.0, 0.0])   # initialize inputs 
-            
-            # randomly select parameters
-            
-            # run through the DNN-model
-            
-                # accumulate error over Tl
-            
-            # compute reward
-            
-            # some kind of decision about learning rate linked to modelling error?
-                      
-            # update (the real) Q table
-            
-            
-            # Travis: start here
-            print('insert dyna Q run ', iDyna, ' of ', nDyna)
-            
-            #increment the dyna counter
-            iDyna += 1
-     
-        # reset Dyna counter 
-        iDyna = 0
+            #print('DNN model avail, running Dyna Q')
         
+            # For the desired number of dyna trials
+            while iDyna < nDyna:
+                
+                # initialize
+                t_dyna          = 0                                                                                          # initialize time
+                state_dyna      = state                                                                                      # adopt the current real state as starting point
+                outputs_dyna    = np.array([state_dyna[0],state_dyna[2], state_dyna[4]]) 
+                target_dyna     = tSpread*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)])     # new target            
+                error_dyna      = outputs-target
+                derror_dyna     = (1/Ts)*(error - (outputs-target))
+                inputs_dyna     = inputs
+                trial_cost_dyna = 0
+                
+                # randomly select parameters (for this trial), full explore
+                kp_i_dyna = QL.select(Q,0,nOptions,1)
+                kp_dyna = scale*kp_i_dyna
+                kd_i_dyna = QL.select(Q,1,nOptions,1)
+                kd_dyna = scale*kd_i_dyna
+                
+                # run through the DNN-model for the trial
+                while round(t_dyna,3) < Tl:
+                    
+                    # get gread for prediction
+                    x_dyn, _ = dnn.build_batch(np.reshape(state_dyna,(1,-1)), np.reshape(inputs_dyna,(1,-1)), 0, 1, DNN_mode)
+                    
+                    # scale
+                    x_dyn = x_dyn/np.reshape(scale_ins_n, (-1,1))
     
+                    
+                    # predict 
+                    state_dyn_new = dnn.predict(np.reshape(x_dyn,(-1,1)), 'empty', DNN_parameters).transpose()
+                    
+                    # unscale
+                    state_dyn_new = state_dyn_new*np.reshape(scale_outs_n, (-1,1)).transpose()
+                    state_dyna = state_dyn_new.ravel()
+        
+                    # compute a control signal
+                    output_dyna = np.array([state_dyna[0],state_dyna[2], state_dyna[4]]) 
+                    derror_dyna = (1/Ts)*(error_dyna - (outputs_dyna-target_dyna))
+                    error_dyna = outputs_dyna-target_dyna
+                    inputs_dyna = - kp*(error_dyna) + kd*(derror_dyna)
+                    
+                    # accumulate error over Tl
+                    trial_cost_dyna += LA.norm(target_dyna-state_dyna[0:6:2])/Tl - ((LA.norm(target_dyna-state_dyna[0:6:2])-LA.norm(error_dyna)))/Tl
+                                    
+                    # increment
+                    t_dyna += Ts
+                
+                #compute the reward (cost normalized over Tl)
+                reward_dyna = 1/np.maximum(trial_cost_dyna,0.00001) # protect div by zero
+            
+                #update the Q table (this is the real table)
+                Q = QL.update(Q,0,kp_i_dyna,1,reward_dyna)
+                Q = QL.update(Q,1,kd_i_dyna,0,reward_dyna)
+                     
+                #increment the dyna counter
+                iDyna += 1
+         
+            #print('Ran Dyna Q ',iDyna, ' times @ time ', t )
+         
+            # reset Dyna counter 
+            iDyna = 0
+        
+   
     # =======================================================================
     # Controller
     # =======================================================================
@@ -381,6 +418,78 @@ while round(t,3) < Tf:
     inputs[2]=np.maximum(np.minimum(inputs[2],umax),-umax)
     
    
+    # # ===================================================================
+    # # Run a few Dyna-Q trials
+    # # ===================================================================
+    
+    # # If we have a model available
+    # if DNN_run_count > 0:
+        
+    #     #print('DNN model avail, running Dyna Q')
+    
+    #     # For the desired number of dyna trials
+    #     while iDyna < nDyna:
+            
+    #         # initialize
+    #         t_dyna          = 0                                                                                          # initialize time
+    #         state_dyna      = state                                                                                      # adopt the current real state as starting point
+    #         outputs_dyna    = np.array([state_dyna[0],state_dyna[2], state_dyna[4]]) 
+    #         target_dyna     = tSpread*np.array([random.uniform(-1, 1),random.uniform(-1, 1),random.uniform(-1, 1)])     # new target            
+    #         error_dyna      = error
+    #         derror_dyna     = derror
+    #         inputs_dyna     = inputs
+    #         trial_cost_dyna = 0
+            
+    #         # randomly select parameters (for this trial), full explore
+    #         kp_i_dyna = QL.select(Q,0,nOptions,1)
+    #         kp_dyna = scale*kp_i_dyna
+    #         kd_i_dyna = QL.select(Q,1,nOptions,1)
+    #         kd_dyna = scale*kd_i_dyna
+            
+    #         # run through the DNN-model for the trial
+    #         while round(t_dyna,3) < Tl:
+                
+    #             # get gread for prediction
+    #             x_dyn, _ = dnn.build_batch(np.reshape(state_dyna,(1,-1)), np.reshape(inputs_dyna,(1,-1)), 0, 1, DNN_mode)
+                
+    #             # scale
+    #             x_dyn = x_dyn/np.reshape(scale_ins_n, (-1,1))
+
+                
+    #             # predict 
+    #             state_dyn_new = dnn.predict(np.reshape(x_dyn,(-1,1)), 'empty', DNN_parameters).transpose()
+                
+    #             # unscale
+    #             state_dyn_new = state_dyn_new*np.reshape(scale_outs_n, (-1,1)).transpose()
+    #             state_dyna = state_dyn_new.ravel()
+    
+    #             # compute a control signal
+    #             output_dyna = np.array([state_dyna[0],state_dyna[2], state_dyna[4]]) 
+    #             derror_dyna = (1/Ts)*(error_dyna - (outputs_dyna-target_dyna))
+    #             error_dyna = outputs_dyna-target_dyna
+    #             inputs_dyna = - kp*(error_dyna) + kd*(derror_dyna)
+                
+    #             # accumulate error over Tl
+    #             trial_cost_dyna += LA.norm(target_dyna-state_dyna[0:6:2])/Tl - ((LA.norm(target_dyna-state_dyna[0:6:2])-LA.norm(error_dyna)))/Tl
+                                
+    #             # increment
+    #             t_dyna += Ts
+            
+    #         #compute the reward (cost normalized over Tl)
+    #         reward_dyna = 1/np.maximum(trial_cost_dyna,0.00001) # protect div by zero
+        
+    #         #update the Q table (this is the real table)
+    #         Q = QL.update(Q,0,kp_i_dyna,1,reward_dyna)
+    #         Q = QL.update(Q,1,kd_i_dyna,0,reward_dyna)
+                 
+    #         #increment the dyna counter
+    #         iDyna += 1
+     
+    #     print('Ran Dyna Q ',iDyna, ' times @ time ', t )   
+     
+    #     # reset Dyna counter 
+    #     iDyna = 0
+        
     
 # %% Results
 # -----------
