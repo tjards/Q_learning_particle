@@ -10,7 +10,7 @@ Created on Sat May 15 19:26:29 2021
 
 
 dev notes:
-    - pass learning rate in as parameter _
+    - Dyna Q is substantially dropping the value of rewards. Probably because of a crappy model.
 
 
 @author: tjards
@@ -115,7 +115,7 @@ target_rand2 = tSpread *random.uniform(-1, 1)      #   "
 
 nDyna = 10          # number of Dyna-Q "planning" sessions
 iDyna = 0           # initialize Dyna count
-
+doDyna = 1          # yes = 1, no = 0
 
 # Deep Neural Network stuff
 # -------------------------
@@ -322,7 +322,7 @@ while round(t,3) < Tf:
         target_rand2 = tSpread *random.uniform(-1, 1)
         
         # reduce the explore rate (floors at 0.001)
-        explore_rate = np.maximum(epsilon**t,0.01)-0.01
+        #explore_rate = np.maximum(epsilon**t,0.01)-0.01
       
         #print('Q Learn trial done at t=', round(t,1)) 
         
@@ -330,8 +330,8 @@ while round(t,3) < Tf:
         # Run a few Dyna-Q trials
         # ===================================================================
         
-        # If we have a model available
-        if DNN_run_count > 0:
+        # If we have a model available and I want to do Dyna
+        if DNN_run_count > 0 and doDyna == 1:
             
             #print('DNN model avail, running Dyna Q')
         
@@ -363,7 +363,6 @@ while round(t,3) < Tf:
                     # scale
                     x_dyn = x_dyn/np.reshape(scale_ins_n, (-1,1))
     
-                    
                     # predict 
                     state_dyn_new = dnn.predict(np.reshape(x_dyn,(-1,1)), 'empty', DNN_parameters).transpose()
                     
