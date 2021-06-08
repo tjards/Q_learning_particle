@@ -19,7 +19,7 @@ from numpy import linalg as LA
 #nState = 2          # number of states
 #nAction = 2         # number of actions
 #explore_rate = 0.8  # how often to explore, 0 to 1
-learn_rate = 0.1 #0.7    # how much to accept new observations, alpha/lambda, 0.9
+learn_rate = 0.005 #0.7    # how much to accept new observations, alpha/lambda, 0.9
 discount = 0 #0.8 #0.9      # balance immediate/future rewards, (gamma): 0.8 to 0.99
 
 

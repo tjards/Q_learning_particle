@@ -40,13 +40,13 @@ import dnnModule as dnn
 # --------------------
  
 Ti          = 0.0       # initial time
-Tf          = 3001      # final time (default 3001)
+Tf          = 4001      # final time (default 3001)
 Ts          = 0.1       # sample time
 Tz          = 0.005     # integration step size
 verbose     = 0         # print progress (0 = no, 1 = yes)
 plotsave    = 0         # save animation (0 = no, 1 = yes), takes long time
-tSpread     = 2         # how far to spread the targets
-random.seed(0)
+tSpread     = 3         # how far to spread the targets
+random.seed(6)
 
 # initialize
 # ----------
@@ -101,8 +101,10 @@ rewards_all         = np.zeros([nSteps, 1])            # to store rewards
 rewards_all[0,:]    = reward
 costs_all           = np.zeros([nSteps, 1])            # to store costs
 costs_all[0,:]      = trial_cost
-explore_rates_all   = np.zeros([nSteps, 1])            # to store explore rates 
+explore_rates_all       = np.zeros([nSteps, 1])        # to store explore rates 
 explore_rates_all[0,:]  = explore_rate
+Q_all                   = np.zeros([nParams,nOptions,nSteps])
+Q_all[:,:,0]            = Q
 
 # randomly select first parameters
 kp_i = QL.select(Q,0,nOptions,explore_rate) # index for first parameter
@@ -182,7 +184,8 @@ while round(t,3) < Tf:
     targets_all[i,:]        = target
     rewards_all[i,:]        = reward       
     costs_all[i,:]          = trial_cost 
-    explore_rates_all[i,:]  = explore_rate 
+    explore_rates_all[i,:]  = explore_rate
+    Q_all[:,:,i]            = Q
 
     # =======================================================================
     # Model the system with a DNN (by minibatches) 
@@ -281,8 +284,9 @@ while round(t,3) < Tf:
     if round(trial_counter,5) < Tl:
     
         # accumulate the cost (position + velocity component)
-        trial_cost += LA.norm(target-state[0:6:2])/Tl - ((LA.norm(target-state[0:6:2])-LA.norm(error)))/Tl
- 
+        #trial_cost += LA.norm(target-state[0:6:2])/Tl - ((LA.norm(target-state[0:6:2])-LA.norm(error)))/Tl
+        trial_cost += LA.norm(target-state[0:6:2]) - ((LA.norm(target-state[0:6:2])-LA.norm(error)))
+
         # increment the counter 
         trial_counter += Ts
         
@@ -294,7 +298,7 @@ while round(t,3) < Tf:
     else: 
               
         #compute the reward (cost normalized over Tl)
-        reward = 1/np.maximum(trial_cost,0.00001) # protect div by zero
+        reward = (Tl/Ts)*1/np.maximum(trial_cost,0.00001) # protect div by zero
         
         #update the Q table
         Q = QL.update(Q,0,kp_i,1,reward)
@@ -355,7 +359,7 @@ while round(t,3) < Tf:
                 kd_dyna = scale*kd_i_dyna
                 
                 # run through the DNN-model for the trial
-                while round(t_dyna,3) < Tl:
+                while round(t_dyna,5) < Tl:
                     
                     # get gread for prediction
                     x_dyn, _ = dnn.build_batch(np.reshape(state_dyna,(1,-1)), np.reshape(inputs_dyna,(1,-1)), 0, 1, DNN_mode)
@@ -364,26 +368,33 @@ while round(t,3) < Tf:
                     x_dyn = x_dyn/np.reshape(scale_ins_n, (-1,1))
     
                     # predict 
-                    state_dyn_new = dnn.predict(np.reshape(x_dyn,(-1,1)), 'empty', DNN_parameters).transpose()
-                    
+                    state_dyn_new = dnn.predict(np.reshape(x_dyn,(-1,1)), 'empty', DNN_parameters).transpose()                    
                     # unscale
                     state_dyn_new = state_dyn_new*np.reshape(scale_outs_n, (-1,1)).transpose()
                     state_dyna = state_dyn_new.ravel()
+                    
+                    # test! using actual dynamics
+                    # =====
+                    #state_dyn_new = integrate.odeint(dynamics, state_dyna, np.arange(t_dyna, t_dyna+Ts, Tz), args = (inputs_dyna,))[-1,:]  
+                    #state_dyna = state_dyn_new
+                    
+                    # ====
         
                     # compute a control signal
-                    output_dyna = np.array([state_dyna[0],state_dyna[2], state_dyna[4]]) 
+                    outputs_dyna = np.array([state_dyna[0],state_dyna[2], state_dyna[4]]) 
                     derror_dyna = (1/Ts)*(error_dyna - (outputs_dyna-target_dyna))
                     error_dyna = outputs_dyna-target_dyna
-                    inputs_dyna = - kp*(error_dyna) + kd*(derror_dyna)
+                    inputs_dyna = - kp_dyna*(error_dyna) + kd_dyna*(derror_dyna)
                     
                     # accumulate error over Tl
-                    trial_cost_dyna += LA.norm(target_dyna-state_dyna[0:6:2])/Tl - ((LA.norm(target_dyna-state_dyna[0:6:2])-LA.norm(error_dyna)))/Tl
-                                    
+                    #trial_cost_dyna += LA.norm(target_dyna-state_dyna[0:6:2]) - ((LA.norm(target_dyna-state_dyna[0:6:2])-LA.norm(error_dyna)))
+                    trial_cost_dyna += LA.norm(target_dyna-state_dyna[0:6:2]) - ((LA.norm(target_dyna-state_dyna[0:6:2])-LA.norm(error_dyna)))
+                       
                     # increment
                     t_dyna += Ts
                 
                 #compute the reward (cost normalized over Tl)
-                reward_dyna = 1/np.maximum(trial_cost_dyna,0.00001) # protect div by zero
+                reward_dyna = (Tl/Ts)*1/np.maximum(trial_cost_dyna,0.00001) # protect div by zero
             
                 #update the Q table (this is the real table)
                 Q = QL.update(Q,0,kp_i_dyna,1,reward_dyna)
@@ -603,129 +614,143 @@ if plotsave == 1:
 
 #%% Costs
 
-starts = 2*int(Tl/Ts)-1
-segments = int(Tl/Ts)
-polyfit_n = 1
+# starts = 2*int(Tl/Ts)-1
+# segments = int(Tl/Ts)
+# polyfit_n = 1
 
-# plot costs
-fig2, ax2 = plt.subplots()
-plt.title('Q-Learning Control Parameters')
-ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
-ax2.set_xlabel('Time [s]')
-ax2.set_ylabel('Cost [m]')
-ax2.set_xlim(0,max(t_all))
-ax2.set_ylim(0,max(costs_all[int(Tl/Ts+1)::,:]))
+# # plot costs
+# fig2, ax2 = plt.subplots()
+# plt.title('Q-Learning Control Parameters')
+# ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+# ax2.set_xlabel('Time [s]')
+# ax2.set_ylabel('Cost [m]')
+# ax2.set_xlim(0,max(t_all))
+# ax2.set_ylim(0,max(costs_all[int(Tl/Ts+1)::,:]))
 
-# create inset axis
-ax3 = plt.axes([0,0,1,1])
-# set position manually (x pos, y pos, x len, y len)
-ip = InsetPosition(ax2, [0.55,0.55,0.4,0.4])
-ax3.set_axes_locator(ip)
-# cool, make lines to point (save this for later)
-#mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
-# data
-ax3.plot(t_all[starts::segments],explore_rates_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
-#ax3.plot(t_all[0::int(Tl/Ts)],rewards_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+# # create inset axis
+# ax3 = plt.axes([0,0,1,1])
+# # set position manually (x pos, y pos, x len, y len)
+# ip = InsetPosition(ax2, [0.55,0.55,0.4,0.4])
+# ax3.set_axes_locator(ip)
+# # cool, make lines to point (save this for later)
+# #mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
+# # data
+# ax3.plot(t_all[starts::segments],explore_rates_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Explore Rate')
+# #ax3.plot(t_all[0::int(Tl/Ts)],rewards_all[0::int(Tl/Ts),0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
 
-ax3.set_xlabel('Time [s]')
-ax3.set_ylabel('Explore Rate')
-ax3.set_xlim(0,max(t_all))
-ax3.set_ylim(0,1)
+# ax3.set_xlabel('Time [s]')
+# ax3.set_ylabel('Explore Rate')
+# ax3.set_xlim(0,max(t_all))
+# ax3.set_ylim(0,1)
 
-plt.savefig('cost.png')
+# plt.savefig('cost.png')
 
 
 #%% Rewards
 
-# plot costs
-fig2, ax2 = plt.subplots()
-plt.title('Q-Learning Control Parameters')
-ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
-ax2.set_xlabel('Time [s]')
-ax2.set_ylabel('Cost [m]')
-#ax2.legend(loc=0)
-ax2.set_xlim(0,max(t_all))
-ax2.set_ylim(0,max(costs_all[int(Tl/Ts+1)::,:]))
+# # plot costs
+# fig2, ax2 = plt.subplots()
+# plt.title('Q-Learning Control Parameters')
+# ax2.plot(t_all[starts::segments],costs_all[starts::segments,0],'-', c='b', mew=2, alpha=0.8,label='Cost')
+# ax2.set_xlabel('Time [s]')
+# ax2.set_ylabel('Cost [m]')
+# #ax2.legend(loc=0)
+# ax2.set_xlim(0,max(t_all))
+# ax2.set_ylim(0,max(costs_all[int(Tl/Ts+1)::,:]))
 
-#best fit line
-cost_fit = np.polyfit(t_all[starts::segments], costs_all[starts::segments,0], polyfit_n)
-p_cost_fit = np.poly1d(cost_fit)
-ax2.plot(t_all[starts::segments], p_cost_fit(t_all[starts::segments]), 'k-')
-
-
-# create inset axis
-ax3 = plt.axes([0,0,1,1])
-# set position manually (x pos, y pos, x len, y len)
-ip = InsetPosition(ax2, [0.55,0.55,0.4,0.4])
-ax3.set_axes_locator(ip)
-# cool, make lines to point (save this for later)
-#mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
-# data
-ax3.plot(t_all[starts::segments],rewards_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
-#ax3.plot(t_all[0::int(Tl/Ts)],test,'--', c='k', mew=2, alpha=0.8,label='Rewards')
-
-#best fit line
-reward_fit = np.polyfit(t_all[starts::segments], rewards_all[starts::segments,0], polyfit_n)
-p_reward_fit = np.poly1d(reward_fit)
-ax3.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
-#plt.show()
-
-ax3.set_xlabel('Time [s]')
-ax3.set_ylabel('Rewards')
-ax3.set_xlim(0,max(t_all))
-ax3.set_ylim(0,max(rewards_all[int(Tl/Ts+1)::,:]))
-
-plt.savefig('rewards.png')
+# #best fit line
+# cost_fit = np.polyfit(t_all[starts::segments], costs_all[starts::segments,0], polyfit_n)
+# p_cost_fit = np.poly1d(cost_fit)
+# ax2.plot(t_all[starts::segments], p_cost_fit(t_all[starts::segments]), 'k-')
 
 
-# plot costs
-fig2, ax2 = plt.subplots()
-plt.title('Q-Learning Control Parameters')
-ax2.set_xlabel('Time [s]')
-ax2.set_ylabel('Cost [m]')
-# data
-ax2.plot(t_all[starts::segments],rewards_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
-#ax3.plot(t_all[0::int(Tl/Ts)],test,'--', c='k', mew=2, alpha=0.8,label='Rewards')
+# # create inset axis
+# ax3 = plt.axes([0,0,1,1])
+# # set position manually (x pos, y pos, x len, y len)
+# ip = InsetPosition(ax2, [0.55,0.55,0.4,0.4])
+# ax3.set_axes_locator(ip)
+# # cool, make lines to point (save this for later)
+# #mark_inset(ax2, ax3, loc1=2, loc2=4, fc="none", ec='0.5')
+# # data
+# ax3.plot(t_all[starts::segments],rewards_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+# #ax3.plot(t_all[0::int(Tl/Ts)],test,'--', c='k', mew=2, alpha=0.8,label='Rewards')
 
-#best fit line
-reward_fit = np.polyfit(t_all[starts::segments], rewards_all[starts::segments,0], polyfit_n)
-p_reward_fit = np.poly1d(reward_fit)
-ax2.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
-#plt.show()
+# #best fit line
+# reward_fit = np.polyfit(t_all[starts::segments], rewards_all[starts::segments,0], polyfit_n)
+# p_reward_fit = np.poly1d(reward_fit)
+# ax3.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
+# #plt.show()
 
-ax2.set_xlabel('Time [s]')
-ax2.set_ylabel('Rewards')
-ax2.set_xlim(0,max(t_all))
-ax2.set_ylim(0,max(rewards_all[int(Tl/Ts+1)::,:]))
+# ax3.set_xlabel('Time [s]')
+# ax3.set_ylabel('Rewards')
+# ax3.set_xlim(0,max(t_all))
+# ax3.set_ylim(0,max(rewards_all[int(Tl/Ts+1)::,:]))
 
-plt.savefig('rewards2.png')
-
-#%%
-
-fig2, ax2 = plt.subplots()
-#ax2.set_xlabel('Time [s]')
-#ax2.set_ylabel('Pos [m]')
-# data
-#ax2.plot(t_all[1001:9000],states_all[1001:9000,0],'--', c='k', mew=2, alpha=0.8)
-#ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
-
-#ax2.plot(states_all[8501:9000,0],states_all[8501:9000,2],'--k',ghosts_all[8501:9000,0],ghosts_all[8501:9000,2],'--r')
-#ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
-#ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
-begin = 20001
-ending = begin+1000
-var = 0
+# plt.savefig('rewards.png')
 
 
-ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
-#ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r',t_all[begin:ending],inputs_all[begin:ending,0], '--m')
-fig2.legend(['states', 'ghosts', 'inputs'])
-#ax2.plot(states_all[10000:2*10000,0],states_all[10000:2*10000,2],'--k',ghosts_all[10000:2*10000,0],ghosts_all[10000:2*10000,2],'--r')
-ax2.set_xlabel('Time [s]')
-ax2.set_ylabel('x-position [s]')
+# # plot costs
+# fig2, ax2 = plt.subplots()
+# plt.title('Q-Learning Control Parameters')
+# ax2.set_xlabel('Time [s]')
+# ax2.set_ylabel('Cost [m]')
+# # data
+# ax2.plot(t_all[starts::segments],rewards_all[starts::segments,0],'--', c='g', mew=2, alpha=0.8,label='Rewards')
+# #ax3.plot(t_all[0::int(Tl/Ts)],test,'--', c='k', mew=2, alpha=0.8,label='Rewards')
 
+# #best fit line
+# reward_fit = np.polyfit(t_all[starts::segments], rewards_all[starts::segments,0], polyfit_n)
+# p_reward_fit = np.poly1d(reward_fit)
+# ax2.plot(t_all[starts::segments], p_reward_fit(t_all[starts::segments]), 'k-')
+# #plt.show()
 
+# ax2.set_xlabel('Time [s]')
+# ax2.set_ylabel('Rewards')
+# ax2.set_xlim(0,max(t_all))
+# ax2.set_ylim(0,max(rewards_all[int(Tl/Ts+1)::,:]))
 
+# plt.savefig('rewards2.png')
+
+#%% RT Test results
+
+if DNN_RT_test == 1:
+
+    fig2, ax2 = plt.subplots()
+    #ax2.set_xlabel('Time [s]')
+    #ax2.set_ylabel('Pos [m]')
+    # data
+    #ax2.plot(t_all[1001:9000],states_all[1001:9000,0],'--', c='k', mew=2, alpha=0.8)
+    #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
+    
+    #ax2.plot(states_all[8501:9000,0],states_all[8501:9000,2],'--k',ghosts_all[8501:9000,0],ghosts_all[8501:9000,2],'--r')
+    #ax2.plot(states_all[:,0],states_all[:,2],'--k',ghosts_all[:,0],ghosts_all[:,2],'--r')
+    #ax2.plot(t_all[1001:9000],ghosts_all[1001:9000,0],'--', c='r', mew=2, alpha=0.8)
+    begin = 20001
+    ending = begin+1000
+    var = 0
+    
+    
+    ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r')
+    #ax2.plot(t_all[begin:ending],states_all[begin:ending,var],'--k',t_all[begin:ending],ghosts_all[begin:ending,var],'--r',t_all[begin:ending],inputs_all[begin:ending,0], '--m')
+    fig2.legend(['states', 'ghosts'])
+    #ax2.plot(states_all[10000:2*10000,0],states_all[10000:2*10000,2],'--k',ghosts_all[10000:2*10000,0],ghosts_all[10000:2*10000,2],'--r')
+    ax2.set_xlabel('Time [s]')
+    ax2.set_ylabel('x-position [s]')
+
+#%% Q Values
+
+beginQ = 0
+endingQ = 40000
+
+figQ, axQ = plt.subplots()
+axQ.plot(t_all[beginQ:endingQ], np.max(Q_all[0,:,beginQ:endingQ], axis = 0), 'b',t_all[beginQ:endingQ], np.max(Q_all[1,:,beginQ:endingQ], axis = 0), 'g')
+#axQ.plot(t_all[beginQ:endingQ], np.mean(Q_all[0,:,beginQ:endingQ], axis = 0), '--b',t_all[beginQ:endingQ], np.mean(Q_all[1,:,beginQ:endingQ], axis = 0), '--g')
+axQ.plot(t_all[beginQ:endingQ], np.min(Q_all[0,:,beginQ:endingQ], axis = 0), ':b',t_all[beginQ:endingQ], np.min(Q_all[1,:,beginQ:endingQ], axis = 0), ':g')
+axQ.set_xlabel('Time [s]')
+axQ.set_ylabel('Q-value')
+figQ.legend(['Max 1','Max 2', 'Min 1','Min 2'], loc = 1)
+plt.axvline(x=1000, c='r')
+plt.title('Progression of Selected Parameters')
 
 #%% Legacy code
 
